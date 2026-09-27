@@ -339,9 +339,49 @@ Full closest-work audit: [12_PRE_PROTOCOL_AUDIT.md](12_PRE_PROTOCOL_AUDIT.md).
 ### H8. Efficient Bayesian Uncertainty Estimation for nnU-Net [V]
 - Zhao Y. et al., MICCAI 2022.
 
-### H9. MoFe loss [NOT READ]
-- IEEE TMI 2025, doi 10.1109/tmi.2025.3526818.
-- Snippet links calibration (ECE/SCE) to missing modalities. **Must be read before the protocol is frozen.**
+### H9. [CORRECTED 2026-09-27] MoFe loss and the TMI DOI are two different papers
+- **DOI 10.1109/TMI.2025.3526818** is PNDC: Qiu Y. et al., *Does Adding a Modality Really Make Positive Impacts in Incomplete Multi-Modal Brain Tumor Segmentation?*, IEEE TMI 2025. Abstract only. Its "double calibration" is a region-level fusion correction. Full text UNVERIFIED.
+- **MoFe ("More vs. Fewer") loss** is from SimMLM: Li S., Chen C., Han J., arXiv:2507.19264 (ICCV 2025 per a secondary listing).
+  - BraTS 2018, all 15 subsets.
+  - ECE/SCE per ET/TC/WT, **averaged over configurations**.
+  - No case-level failure detection. No external data.
+  - Code: github.com/LezJ/SimMLM
+- The earlier entry conflated the two.
+
+## I. Added in the pre-freeze audit (2026-09-27; see [13](13_PRE_FREEZE_AUDIT.md))
+
+### I1. Missing Modality-Aware Calibration for Trustworthy Brain Tumor Segmentation (MMA-LTS) [V, full text]
+- Lee S., Kim H., Hong S., Han D., Yi M. Y., MICCAI 2026. https://papers.miccai.org/miccai-2026/0659-Paper1236.html
+- Voxel-wise post-hoc temperature scaling conditioned on modality availability.
+- ECE per 15 combinations × WT/TC/ET on BraTS 2020 and FeTS 2024.
+- No case-level failure detection. No external data. No statistical tests. Code N/A.
+- **Closes voxel-level missingness-specific calibration.**
+
+### I2. Foundation Model and Radiomics Distance Scores for Post-Hoc Segmentation Failure Detection [V, full text]
+- Joham S. J. et al., UNSURE 2026.
+- Pooled vs within-site E-AURC. Shows pooled ranking can reward between-site difficulty ordering.
+
+### I3. Reliability, Not Accuracy, Is the Bottleneck in AI-assisted Post-Treatment Glioma Segmentation [V, full text]
+- Badr M. A. M. et al., UNSURE 2026.
+- Region-aware recalibration and risk-controlled triage on BraTS 2024 post-treatment data. No missing sequences.
+
+### I4. Guarantees That Survive a Missing Scan: Modality-Conditional Conformal Prediction [V, abstract]
+- Ajit A., MLMI 2026.
+- Classification task. Conformal calibration stratified by missingness pattern.
+
+### I5. Other screened, non-overlapping papers [V, title/abstract]
+- MICCAI 2026: SAR-Net, HK-Fuse, MoCaf-Mamba, BrainAnytime
+- MICCAI 2026 satellite: BrainWorks "Reliability-aware Multimodal Fusion" (full text; complete inputs)
+- BraTS 2025 proceedings: BRAIN-CATS, "Enabling Uncertainty Measurement… BraTS 2025 Pediatrics"
+- MICCAI 2025: MST-KDNet, DC-Seg, IM-Fuse, FedAMM
+
+### I6. Pemberton et al. 2023 (C8) — full text now read via Europe PMC [V]
+- No uncertainty, calibration or failure-detection analysis. "Quality control" refers to visual data checks only.
+
+### Dataset corrections (from the official TCIA crosswalk `BraTS2021_MappingToTCIA.xlsx`)
+- BraTS 2021 training contains **511 UPenn-origin (site 1)** cases: 403 `UPENN-GBM` + 108 `UPENN-GBM_Additional`.
+- **[C7] Öchsner et al.** excluded only 403 (848 = 1,251 − 403). This implies 108 same-site cases remained in their development set [INFERENCE].
+- **BraTS-Africa (TCIA v2 metadata):** 95 glioma + 51 other neoplasms, all labelled.
 
 ### Corrections to earlier entries
 - **A5 (BraTS-Africa):** 146 cases = 95 glioma + 51 other CNS tumours. All scans are 1.5T. Labels were refined from nnU-Net pre-segmentations in a three-stage expert review. The count of public glioma labels needs verifying (sources say 60, 75 or 95).

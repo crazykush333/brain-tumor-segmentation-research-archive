@@ -275,3 +275,13 @@ Assumptions:
 **Minimum scientifically sufficient design.** Six trainings. **No** per-subset models, because the question concerns a single deployable model. MC-dropout is **excluded**: nnU-Net has no dropout, and adding it would change the architecture being evaluated. Deep ensembles come from the seed runs.
 
 **Option if paid GPU becomes available.** One full 1,000-epoch run per arm as an "anchor" sensitivity check that the 250-epoch schedule does not change conclusions. Not required.
+
+---
+
+## Correction notice (2026-09-27, pre-freeze audit)
+
+See [13_PRE_FREEZE_AUDIT.md](13_PRE_FREEZE_AUDIT.md). The following statements above are superseded:
+
+1. **UPenn count.** The UPenn-origin set inside BraTS 2021 training is **511 cases (site 1)**, not 403. The 403 figure counts only the `UPENN-GBM` collection label and misses 108 `UPENN-GBM_Additional` cases.
+2. **H9 attribution.** DOI 10.1109/TMI.2025.3526818 is PNDC, not the MoFe loss (which is from SimMLM, arXiv:2507.19264).
+3. **Falsification table.** It must now include **MMA-LTS (MICCAI 2026)**, which evaluates voxel-level calibration per missing-modality combination and per region. This closes item 2 ("missing-sequence-specific calibration") at the voxel level.

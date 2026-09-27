@@ -53,3 +53,30 @@ The following query strings from the owner's list were covered by queries 1–15
 4. MoFe-loss (IEEE TMI 2025, doi 10.1109/tmi.2025.3526818) could not be read. Its snippet mentions calibration (ECE/SCE) together with missing modalities, so it **must be read before any novelty claim**.
 5. The Pemberton et al. 2023 full text could not be retrieved. Its entry relies on the abstract and secondary summaries.
 6. The QCResUNet Appendix E numbers (QC performance with missing modalities) could not be retrieved.
+
+---
+
+## Round 3 — adversarial pre-freeze search (2026-09-27)
+
+Full audit: [13_PRE_FREEZE_AUDIT.md](13_PRE_FREEZE_AUDIT.md).
+
+| Source | Method | Result |
+|---|---|---|
+| MICCAI 2026 main (1,165 papers) | Full BibTeX title list from papers.miccai.org, keyword screen, manual reading | **MMA-LTS (Lee et al.) — closest overlap, full text read.** SIUM confirmed as MICCAI 2026. Others accuracy-only. |
+| MICCAI 2026 satellite (1,607 papers) | Full title list; all 38 UNSURE 2026 titles and all BrainWorks/BraTS titles read | Joham (pooled vs within-site E-AURC), Badr (post-treatment triage), Ajit MLMI (conformal by missingness pattern, classification), BraTS-GoAT reliability study |
+| MICCAI 2025 main (1,027 papers) | Full title list, keyword screen | Accuracy-only missing-modality methods |
+| UNSURE 2025 (22 chapters) | Crossref (container-title query) | No missing-modality paper |
+| BrainLes 2023 / BraTS 2023 proceedings (16 + 36) | Crossref ISBN filter | No overlap |
+| BraTS/BrainLes 2025 proceedings (48 + 33) | Crossref ISBN filter | BRAIN-CATS, PEDs uncertainty: no missingness |
+| **BrainLes / BraTS 2024 proceedings** | Crossref, Springer, researchr | **Not located — UNSCREENED** |
+| MIDL 2025 (PMLR v301, 110) and MIDL 2026 (PMLR v315, 221) | Full title lists | No overlap |
+| MELBA 2025–2026 (120 titles) | Per-paper page titles | No overlap |
+| DOI 10.1109/TMI.2025.3526818 | DOI search | Resolves to **PNDC**, not MoFe (correction). Full text not accessible. |
+| MoFe loss | Web search → arXiv:2507.19264 (SimMLM) | Full text read |
+| Pemberton 2023 | Europe PMC full-text XML API | Full text searched: no reliability analysis |
+
+**Blocked sources:** dblp (bot challenge), OpenReview API (challenge), Springer chapter pages (login redirect), IEEE Xplore, PMC HTML (reCAPTCHA).
+
+**Metadata files inspected** (identifiers only, stored in the session scratchpad, not in the repository):
+- `BraTS2021_MappingToTCIA.xlsx` (TCIA)
+- `BraTS-Africa_TCIA_datainfo_v2.xlsx` (TCIA)

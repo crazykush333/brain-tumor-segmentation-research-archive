@@ -10,7 +10,7 @@ This repository currently contains only the **research-design phase**: literatur
 |---|---|
 | Literature review and gap analysis | Draft complete (2026-09-27), awaiting review |
 | Research direction | Candidate: reliability under incomplete MRI acquisition (pre-protocol audit complete) |
-| Final research protocol | Draft v0.1 awaiting approval ([protocol](docs/research/FINAL_RESEARCH_PROTOCOL.md), [audit](docs/research/12_PRE_PROTOCOL_AUDIT.md)) |
+| Final research protocol | Draft v0.1 — pre-freeze audit verdict: **revision required** ([protocol](docs/research/FINAL_RESEARCH_PROTOCOL.md), [audit 12](docs/research/12_PRE_PROTOCOL_AUDIT.md), [audit 13](docs/research/13_PRE_FREEZE_AUDIT.md)) |
 | Implementation / experiments | Not started |
 
 ## Documents
