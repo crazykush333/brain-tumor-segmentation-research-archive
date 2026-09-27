@@ -300,3 +300,51 @@ Fields that do not apply to a paper type (e.g. "architecture" for a dataset pape
 - BraTS-Africa: split of the 146 cases into public-labelled vs held-out.
 - MU-Glioma-Post: case count and whether labels are expert-refined.
 - Licences of mmFormer, M3AE, ShaSpec, RFNet repositories, and of nnU-Net.
+
+---
+
+## H. Added in the pre-protocol audit (2026-09-27)
+
+Full closest-work audit: [12_PRE_PROTOCOL_AUDIT.md](12_PRE_PROTOCOL_AUDIT.md).
+
+### H1. Reliability analysis for BraTS-GoAT segmentation: a controlled robustness study of deep-ensemble uncertainty [V]
+- arXiv:2608.13223 (2026).
+- Design: nnU-Net ResEnc-L with a 3-seed ensemble; ECE, AURC, per-region ET/TC/WT.
+- Shifts: synthetic corruptions only. No missing sequences.
+- Code: github.com/riyashet-hds/brats-goat-reliability
+
+### H2. Confidence is Not Reliability: Rethinking MC Dropout in Brain Tumour Segmentation [V]
+- Wong X. C. et al., MIUA 2026, arXiv:2606.19300.
+- Region-specific ET calibration on 126 BraTS21 cases, complete inputs.
+
+### H3. BMDS-Net [V]
+- Zhou et al., arXiv:2601.17504 (2026).
+- ECE reported on complete inputs only. Single-sequence removal evaluated for Dice only.
+
+### H4. GlioMODA: Robust glioma segmentation in clinical routine [V]
+- Canisius J., Buchner J., Rosier M. et al., Neuro-Oncology Advances 2026 (PubMed 41841144).
+- 11 sequence protocols with volumetric error analysis.
+- Code: github.com/BrainLesion/GlioMODA
+
+### H5. AI-powered segmentation and prognosis with missing MRI in pediatric brain tumors [V]
+- npj Precision Oncology 2026.
+- Dropout-trained model for missing FLAIR/T1w in a pediatric cohort.
+
+### H6. Modality redundancy for MRI-based glioblastoma segmentation [V]
+- De Sutter S. et al., IJCARS 2024; 19(10):2101–2109.
+
+### H7. Öchsner et al. — peer-reviewed version of [C7] [V]
+- Frontiers in Neurology, 28 July 2026 (doi 10.3389/fneur.2026.1889198).
+
+### H8. Efficient Bayesian Uncertainty Estimation for nnU-Net [V]
+- Zhao Y. et al., MICCAI 2022.
+
+### H9. MoFe loss [NOT READ]
+- IEEE TMI 2025, doi 10.1109/tmi.2025.3526818.
+- Snippet links calibration (ECE/SCE) to missing modalities. **Must be read before the protocol is frozen.**
+
+### Corrections to earlier entries
+- **A5 (BraTS-Africa):** 146 cases = 95 glioma + 51 other CNS tumours. All scans are 1.5T. Labels were refined from nnU-Net pre-segmentations in a three-stage expert review. The count of public glioma labels needs verifying (sources say 60, 75 or 95).
+- **A6 (UCSF-PDGM):** 495 unique patients after follow-up re-labelling. Labels come from an automated ensemble, then manual correction and approval by 2 reviewers. TCIA provides the BraTS-ID mapping.
+- **A7 (UPenn-GBM):** labels are automated plus expert-revised/approved (per-case counts not given). The collection has 630 subjects, of which about 403 are inside BraTS 2021 (per [C7]). The BraTS 2021 mapping file lists UPenn as a source.
+- **C7:** the external test is the UPenn subset **inside** BraTS 2021, with development on the remaining 848 cases. It is a held-out institution, not an independently preprocessed cohort.
