@@ -2,29 +2,31 @@
 
 | Field | Value |
 |---|---|
-| Protocol version | **v0.2 — REVISED DRAFT, awaiting owner approval** (pre-freeze revision; **not frozen**) |
-| Date of this revision | 2026-09-27 |
-| Previous version | v0.1 (2026-09-27), superseded |
-| Reason for revision | [13_PRE_FREEZE_AUDIT.md](13_PRE_FREEZE_AUDIT.md), verdict "B. Protocol requires revision". Changes are listed in §25 and [14_PROTOCOL_REVISION_SUMMARY.md](14_PROTOCOL_REVISION_SUMMARY.md). |
+| Protocol version | **v0.3 — AMENDED PRE-FREEZE DRAFT, awaiting owner approval** (**NOT FROZEN**) |
+| Date of this revision | 2026-09-28 |
+| Previous versions | v0.2 (2026-09-27; approved by the owner for pre-freeze verification), v0.1 (2026-09-27); both superseded |
+| Reason for revision | Controlled amendment A1–A5 from [15_PREFREEZE_VERIFICATION_REPORT.md](15_PREFREEZE_VERIFICATION_REPORT.md), authorized by the owner on 2026-09-28. The research question, H-W and the primary endpoint are unchanged. Changes are listed in §25 and [16_PROTOCOL_V0.3_CHANGELOG.md](16_PROTOCOL_V0.3_CHANGELOG.md). Earlier revision: [14_PROTOCOL_REVISION_SUMMARY.md](14_PROTOCOL_REVISION_SUMMARY.md). |
 | Freeze rule | Only after the owner approves **and** the pre-freeze checklist is complete: the version becomes v1.0 and is git-tagged `protocol-v1.0`. After that, changes are allowed only as logged amendments (§25). No change is allowed after any test-set evaluation. |
-| Basis | [12_PRE_PROTOCOL_AUDIT.md](12_PRE_PROTOCOL_AUDIT.md), [13_PRE_FREEZE_AUDIT.md](13_PRE_FREEZE_AUDIT.md), [search_log.md](search_log.md) |
+| Basis | [12_PRE_PROTOCOL_AUDIT.md](12_PRE_PROTOCOL_AUDIT.md), [13_PRE_FREEZE_AUDIT.md](13_PRE_FREEZE_AUDIT.md), [15_PREFREEZE_VERIFICATION_REPORT.md](15_PREFREEZE_VERIFICATION_REPORT.md), [search_log.md](search_log.md) |
 
 No experiment has been run and no data has been downloaded. This document contains no results. Numbers are design parameters, **[LITERATURE RESULT]**s, **[VERIFIED]** metadata facts or **[ESTIMATE]**s.
 
 ### Pre-freeze checklist
 
-**None of these items is complete.** Each must be closed, or explicitly waived by the owner with a reason, before v1.0.
+**None of these items is complete.** Each must be closed, or explicitly waived by the owner with a reason, before v1.0. Status notes are from [15_PREFREEZE_VERIFICATION_REPORT.md](15_PREFREEZE_VERIFICATION_REPORT.md).
 
-- [ ] **1. BrainLes / BraTS 2024 proceedings** remain unscreened (the volume could not be located on 2026-09-27). Screen them title by title and update §23 if anything overlaps.
-- [ ] **2. PNDC** (Qiu et al., IEEE TMI 2025, doi 10.1109/TMI.2025.3526818): full text is unverified; only the abstract has been read. Read it, or record it as inaccessible.
-- [ ] **3. BraTS 2021 / TCIA crosswalk.** Record the SHA-256 of `BraTS2021_MappingToTCIA.xlsx` at the data milestone. Re-derive the site-1 count (expected 511) from the file used for the splits.
-- [ ] **4. BraTS-Africa file-level verification.** Confirm on the downloaded files:
+- [ ] **1. BrainLes / BraTS 2024 proceedings.** Partially closed: no LNCS volume was indexed on 2026-09-27/28; a surrogate arXiv screen found no overlap. Screen the volume when available, or record an owner waiver. Update §23 if anything overlaps.
+- [ ] **2. PNDC** (Qiu et al., IEEE TMI 2025, doi 10.1109/TMI.2025.3526818). **Full text unverified**; only metadata and abstract have been read. Read the full text via institutional access, or record an owner waiver.
+- [ ] **3. BraTS 2021 / TCIA crosswalk.** Counts are verified from metadata (1,251 / 511 / 740). At the data milestone, record the SHA-256 of the exact `BraTS2021_MappingToTCIA.xlsx` used for the split, and re-derive the counts from it.
+- [ ] **4. BraTS-Africa file-level verification.** Metadata is verified (§5). Confirm on the downloaded files:
   - label values (expected 1 = NETC, 2 = SNFH, 3 = ET);
-  - the number of eligible glioma cases (expected ≤ 95);
-  - the presence of all 4 sequences.
-- [ ] **5. Licensing.** Establish whether BraTS 2021 data (TCIA Restricted License Agreement / Synapse terms) may be stored as a *private* Kaggle dataset or must be re-downloaded and re-preprocessed each session (see SR7).
-- [ ] **6. EXP-001 compute pilot.** Measure the quantities in §17.2 and confirm or revise the budget under SR1/SR6. (EXP-001 is approved only after owner review of v0.2.)
-- [ ] **7. Owner approval** of this protocol.
+  - the eligible glioma count (≤ 95);
+  - the presence of all 4 sequences;
+  - which cases lack one or more sub-regions.
+- [ ] **5. Licensing / data route.** Confirm with TCIA whether private third-party re-hosting (including a private Kaggle dataset) is acceptable (§5, SR7). The owner then approves the operational data route.
+- [ ] **6. EXP-001 compute pilot.** Specification: [EXP-001_COMPUTE_PILOT_SPEC.md](../experiments/EXP-001_COMPUTE_PILOT_SPEC.md). It requires owner authorization, an approved data route (item 5) and the A1 grouping procedure (§6). Measure the §17.2 quantities and confirm or revise the budget under SR1/SR6.
+- [ ] **7. Same-patient screen parameters (A1).** Pre-specify the WT-label Dice flagging threshold and the manual-review procedure of §6.2 **before** split creation, and record them in this protocol.
+- [ ] **8. Owner approval** of this protocol for freeze (v1.0).
 
 ---
 
@@ -87,16 +89,21 @@ These are tested within the families of §14.
 - **S2.** The primary endpoint computed for TC and WT.
 - **S8.** The primary endpoint and S1 on the UPenn held-out institution (511 cases) and on BraTS-Africa (≤ 95 cases), separately (H-W-ext).
 - **S7.** Threshold transfer (H-T):
-  - τ is fixed once on the internal **validation** set, as the U1 threshold giving 80% coverage on the validation C5 units (equal condition mixture).
-  - Sensitivity analyses use 70% and 90%.
-  - For each target set (internal test, UPenn, BraTS-Africa), with τ unchanged, compute:
-    - **Δrisk** = target selective ET risk − validation selective ET risk;
-    - **Δcoverage** = target coverage − validation coverage.
-  - CIs come from **independent** patient bootstraps of the validation set and the target set (10,000 paired replicates, each resampling both sets independently).
-  - **Unsafe transfer:** the 95% CI of Δrisk lies entirely > 0.
-  - **Inefficient transfer:** the 95% CI of Δcoverage lies entirely < 0.
-  - Neither label is applied otherwise, and **no equivalence is claimed**.
-  - τ itself is not re-estimated within the bootstrap. This is a stated limitation (§22).
+  - **Deterministic threshold rule (A3).** For target coverage q, τ_q is the **largest observed U1 value** such that coverage(validation, U1 ≥ τ_q) ≥ q.
+    - Coverage is computed on the validation C5 units (equal condition mixture).
+    - There is no interpolation between U1 values and no random tie-breaking. All units with U1 ≥ τ_q are accepted, so the realized validation coverage may exceed q when U1 has ties.
+  - q = 0.80 (primary); q = 0.70 and q = 0.90 (sensitivity).
+  - τ_q is estimated **once, on internal validation only**. It is never re-estimated on the internal test, UPenn or BraTS-Africa sets, and never estimated from test or external data.
+  - For each target set (internal test, UPenn, BraTS-Africa), with the same U1 ≥ τ_q rule, compute:
+    - **Δrisk** = target selective ET risk − validation selective ET risk (**Δrisk > 0 means the target risk is worse than validation**);
+    - **Δcoverage** = target coverage − validation coverage (**Δcoverage < 0 means fewer cases are accepted on the target**).
+  - Report τ_q, the realized validation coverage and the realized target coverage for every q and target.
+  - CIs come from **independent** bootstraps (patient-group level, §6) of the validation set and the target set, 10,000 replicates, each resampling both sets independently.
+  - Two-sided bootstrap p-values use the §13 construction, applied to Δrisk and Δcoverage.
+  - **Unsafe transfer (A2)** is declared only when the Holm-adjusted p-value for the relevant F3 hypothesis is < 0.05 **and** the estimated Δrisk is > 0.
+  - **Inefficient transfer** is declared only when the Holm-adjusted p-value for the relevant F3b hypothesis is < 0.05 **and** the estimated Δcoverage is < 0.
+  - Unadjusted 95% CIs are reported descriptively. Neither label is applied otherwise, and **no equivalence is claimed**.
+  - τ_q is not re-estimated within the bootstrap. This is a stated limitation (§22).
 - **S9.** Arm A within-condition ΔAURC_c for the four missing conditions (H4).
 
 **Secondary, descriptive only** (reported with 95% CIs, no hypothesis test):
@@ -141,9 +148,44 @@ These are tested within the families of §14.
 
 | Role | Dataset | Inclusion | n |
 |---|---|---|---|
-| **Development** (train / validation / internal test) | BraTS 2021 training set (Synapse / TCIA Restricted License Agreement) | All training cases **not** from site 1 (UPenn) | **740** [VERIFIED from crosswalk metadata] |
+| **Development** (train / validation / internal test) | BraTS 2021 training set (see §5.1 for licence and access) | All training cases **not** from site 1 (UPenn) | **740 cases** before patient grouping [VERIFIED from crosswalk metadata]; ≤ 738 patients (§6) |
 | **Held-out institution (HOI)** | UPenn-origin cases **within** BraTS 2021 training: `UPENN-GBM` (403) + `UPENN-GBM_Additional` (108), all **site 1** | All with 4 sequences and labels | **511** [VERIFIED from crosswalk metadata] |
-| **External** | BraTS-Africa, TCIA **v2** release (CC BY 4.0). Metadata sheets: "95 Glioma", "51 OtherNeoplasms". | The **95** adult glioma cases with 4 sequences and labels. **51 OtherNeoplasms cases excluded.** | **≤ 95** (to confirm on files) |
+| **External** | TCIA BraTS-Africa collection (**Version 1, updated 2024-09-04**; metadata file `BraTS-Africa_TCIA_datainfo_v2.xlsx`); processed release, CC BY 4.0. Metadata sheets: "95 Glioma", "51 OtherNeoplasms". | The **95** adult glioma cases with 4 sequences and labels. **51 OtherNeoplasms cases excluded.** | **≤ 95** (eligible count pending file-level verification) |
+
+### 5.1 Licence, access and data route (A4)
+
+**BraTS 2021** [VERIFIED from official pages, 2026-09-27/28]:
+
+- The TCIA analysis result "RSNA-ASNR-MICCAI-BraTS-2021" (DOI 10.7937/jc8x-9874) lists the challenge package ("Challenge data both tasks", 142 GB) and the ID crosswalk as **CC BY 4.0**.
+- The linked original source DICOMs of some collections fall under the NIH Controlled Data Access Policy. They are not needed.
+- Synapse access (syn25829067 / syn25829070) requires an authenticated account and is subject to the Synapse Terms and Conditions of Use and the BraTS 2021 "Rules & Resources" citation and acknowledgement requirements.
+- The **TCIA Data Usage Policy** applies:
+  - no re-identification;
+  - no facial renderings;
+  - dataset DOI citation;
+  - review of TCIA's Data Analysis Centers page before any mirroring or third-party access.
+- Required citations (BraTS 2021 papers and the TCIA DOIs) and the Synapse acknowledgement sentence must be followed.
+
+**Private third-party re-hosting:** "Private third-party re-hosting (including private Kaggle dataset storage) requires confirmation from TCIA before use." The published terms do not explicitly address it (**ambiguous**). This protocol makes no legal conclusion.
+
+**Other data-handling rules:**
+
+- The project will **not** use or create a **public Kaggle mirror**. Unofficial mirrors are never a source of record.
+- The operational data route is **pending owner confirmation** after the TCIA reply (checklist item 5; SR7).
+- Trained checkpoints are not published unless the providers confirm this is acceptable.
+
+**BraTS-Africa:** the processed release is CC BY 4.0. Unprocessed images are under limited access and are not needed. TCIA citation (DOI 10.7937/v8h6-8x67) is required.
+
+### 5.2 Verification status of dataset facts (A5)
+
+| Fact | Metadata / documentation verification | File-level verification |
+|---|---|---|
+| BraTS 2021: 1,251 training; site 1 = 511 (403 + 108); development = 740 | VERIFIED (TCIA crosswalk) | Pending (data milestone; hash of the file used) |
+| BraTS-Africa: 95 Glioma / 51 OtherNeoplasms | VERIFIED (TCIA metadata spreadsheet) | Pending |
+| BraTS-Africa sequences T1, T1 CE, T2, T2 FLAIR | VERIFIED (TCIA collection description; 146 subjects / 730 processed series) | Pending (per-case completeness) |
+| BraTS-Africa labels 1 = NETC, 2 = SNFH, 3 = ET | VERIFIED from BraTS 2023 challenge documentation only | Pending |
+| Some BraTS-Africa glioma cases have fewer than 3 labelled sub-regions (metadata: 3 labels = 89, 2 = 5, 1 = 1, one blank row), so ET may be absent | VERIFIED (metadata) | Pending |
+| BraTS-Africa eligible count (≤ 95) | Design parameter | Pending; the final count is only knowable after file inspection |
 
 Notes on the held-out institution:
 
@@ -154,7 +196,7 @@ Notes on the held-out institution:
 **Shift characteristics:**
 
 - **HOI:** same BraTS preprocessing and curation, different institution. It is likely a mild shift; [C7] reports ~95% external Dice [LITERATURE RESULT].
-- **BraTS-Africa:** population and acquisition shift. Four Nigerian centres and three scanner models (Siemens Magnetom Essenza, GE SIGNA Creator, Philips Achieva) per the v2 metadata [VERIFIED metadata]. Labels were refined from nnU-Net pre-segmentations with multi-stage expert review [A5].
+- **BraTS-Africa:** population and acquisition shift. Four Nigerian centres and three scanner models (Siemens Magnetom Essenza, GE SIGNA Creator, Philips Achieva) per the collection's metadata spreadsheet `BraTS-Africa_TCIA_datainfo_v2.xlsx` [VERIFIED metadata]. Native slice thickness is 3–5 mm before resampling [VERIFIED, TCIA description]. Labels were refined from nnU-Net pre-segmentations with multi-stage expert review [A5].
 
 **Not used:** UCSF-PDGM, EGD and standalone TCIA UPenn-GBM (possible future work).
 
@@ -162,18 +204,61 @@ Notes on the held-out institution:
 
 **Not yet created.** Splits are created only after v1.0.
 
-- Development (740) is split **70 / 10 / 20** into train / validation / internal test [ESTIMATE ≈ 518 / 74 / 148].
-- Stratification: ET present vs absent, and WT-volume tertile. Both are computed from labels only.
-- Split seed `20260927`. The split is performed once, before any training.
-- ID lists (IDs only) are committed to `splits/`, and their hashes are recorded in the v1.0 protocol.
-- One BraTS subject is treated as one patient. Any duplicate TCIA patient IDs are grouped.
+### 6.1 Unit of analysis: the patient group (A1)
+
+The split unit, the stratification unit and the bootstrap unit are the **patient group**, not the BraTS subject/case.
+
+Why:
+
+- Patient identity is imperfectly observable in BraTS 2021.
+- 243 development rows carry the placeholder TCIA ID "new-not-previously-in-TCIA".
+- Grouping by TCIA ID alone cannot detect all same-patient relationships [VERIFIED, crosswalk].
+
+Grouping keeps correlated follow-up scans of the same patient from crossing train/validation/test boundaries, and keeps them together in bootstrap resampling.
+
+**Verified same-patient groups** [VERIFIED: TCIA `UCSF-PDGM-metadata_v5.csv` + crosswalk]. Both are site 18, so both are in development:
+
+| Group | BraTS 2021 IDs | Source relation |
+|---|---|---|
+| **A** | BraTS2021_00626, BraTS2021_00758 | UCSF-PDGM-433 and its follow-up UCSF-PDGM-0433_FU007d (7 days) |
+| **B** | BraTS2021_00639, BraTS2021_00557 | UCSF-PDGM-429 and its follow-up UCSF-PDGM-0429_FU003d (3 days) |
+
+Groups A and B remain together in splitting, stratification and bootstrap resampling. The development pool is therefore 740 cases and at most 738 patient groups before the §6.2 screen.
+
+Any case with a real TCIA patient ID shared with another case is also grouped. None is known in the training cohort [VERIFIED, crosswalk].
+
+### 6.2 Pre-split label-only same-patient screen (safeguard for unidentified duplicates)
+
+This screen uses **only** ground-truth labels and image metadata available before any model training. It never uses predictions, test results, calibration results or any other outcome of the study.
+
+1. For every pair of development cases, compute the **WT-label Dice** between their ground-truth WT masks. All BraTS cases are in the same SRI24 space, so no registration is performed.
+2. Flag pairs with WT-label Dice ≥ **T_screen**. **T_screen = TO BE PRE-SPECIFIED BEFORE SPLIT CREATION.** No defensible value is documented in the project sources, so none is chosen here.
+3. **Manual review** of each flagged pair confirms or rejects a same-patient relationship. The review procedure (reviewer, material inspected, decision rule, recording of reasons) = **TO BE PRE-SPECIFIED BEFORE SPLIT CREATION**.
+4. Confirmed pairs are merged into patient groups, transitively.
+5. T_screen and the review procedure are recorded in this protocol and frozen **before** the final split is created (checklist item 7). The screen output (flagged pairs, decisions, final groups; IDs only) is committed.
+
+The same screen is applied **within the HOI set (511 cases)** only to define bootstrap patient groups. There, it has no effect on training.
+
+BraTS-Africa subjects are treated as distinct patients, per the TCIA description of 146 patients.
+
+### 6.3 Split procedure
+
+- Development patient groups are split **70 / 10 / 20** into train / validation / internal test [ESTIMATE ≈ 518 / 74 / 148 cases].
+- Stratification is at group level: ET present in any member vs absent in all members, and the tertile of the mean member WT volume. Both come from labels only.
+- Split seed `20260927`. Randomization operates on patient groups. The split is performed once, before any training.
+- **The split script must assert:**
+  - no site-1 case enters development (selection by crosswalk `Site ID ≠ 1`, not by collection name);
+  - the development count before grouping = **740**;
+  - every confirmed same-patient group (including A and B) lies entirely within one partition.
+- ID lists (IDs and group IDs only) are committed to `splits/`, and their hashes are recorded in the v1.0 protocol.
 - **Site 18 (UCSF, 382 training cases) stays in development.** Site composition of each split is reported.
 
 ## 7. Deduplication
 
 - **Development vs HOI:** disjoint by site, per the crosswalk.
+- **Within development and within HOI:** patient grouping per §6.1–6.2.
 - **BraTS-Africa vs BraTS 2021:** different institutions; overlap is very unlikely [INFERENCE]. An identical-image-hash check is performed as a safeguard.
-- The deduplication script output (IDs and counts) is committed, and the counts are reported in the paper.
+- The deduplication and grouping output (IDs and counts) is committed, and the counts are reported in the paper.
 
 ## 8. Preprocessing
 
@@ -213,7 +298,15 @@ No new architecture, no MC-dropout and no attention or fusion module is used.
 
 Scores are computed per case and region r.
 
-- **U1 (primary):** mean pairwise Dice between the three members' binary masks for r. Both empty → 1.
+- **U1 (primary):** mean pairwise Dice between the three members' binary masks for r (each member thresholded at 0.5). Both empty → 1.
+  - Properties (A3):
+    - three members give only three pairwise comparisons;
+    - U1 is continuous in general;
+    - it has a mass point at **1** when all members predict an empty region;
+    - it has mass at **0** when at least one member predicts empty and another predicts non-empty;
+    - discordant tiny-ET predictions can therefore produce false alarms;
+    - U1 depends on the fixed 0.5 member threshold.
+  - Operating thresholds on U1 use the deterministic ≥ rule of §4 S7.
 - **U2 (secondary, descriptive):** negative mean binary entropy of the ensemble-mean probability within the ROI (union of member masks for r, dilated by 3 voxels). An empty ROI gives entropy 0.
 - **U3 (exploratory):** single-model (seed 0) mean max-probability within the ROI.
 - **I (baseline):** −(mean risk of that condition for r), estimated on the **validation** set for the same arm's ensemble.
@@ -232,9 +325,9 @@ Scores are computed per case and region r.
 
 ## 13. Statistical procedures
 
-**Primary (H-W), 10,000 patient-level bootstrap replicates on the internal test set.** For each replicate:
+**Primary (H-W), 10,000 patient-group-level bootstrap replicates on the internal test set** (unchanged apart from the resampling unit, per A1). For each replicate:
 
-1. Resample patients with replacement, keeping **all C5 conditions** of every sampled patient.
+1. Resample **patient groups** (§6.1) with replacement, keeping all cases of each sampled group and **all C5 conditions** of every case.
 2. For each condition c, compute AURC_c(U1) and AURC_c(I) (the mean ET risk of condition c in the replicate).
 3. Compute ΔAURC_c.
 4. Average the five ΔAURC_c values.
@@ -249,30 +342,36 @@ Scores are computed per case and region r.
 
 **Other procedures:**
 
-- **Secondary tested endpoints:** the same bootstrap scheme on the relevant set. S7 uses independent validation and target bootstraps (§4).
+- **Secondary tested endpoints (A2):** the same patient-group bootstrap scheme on the relevant set. S7 uses independent validation and target bootstraps (§4).
+  - Every tested secondary endpoint has a two-sided bootstrap p-value with the same construction as the primary: p = 2 × min[P*(Δ ≥ 0), P*(Δ ≤ 0)].
+  - Holm correction is applied to these p-values **within each family** (§14).
+  - Inferential claims within a secondary family use the **Holm-adjusted p-value** (< 0.05), together with the sign of the estimate in the hypothesised direction.
+  - Unadjusted 95% CIs are reported descriptively.
 - **Supporting:** per-patient ET Dice differences (B − A) averaged over C5, with a Wilcoxon signed-rank test and bootstrap CI reported descriptively. The full-input TOST uses a ±1.5 Dice-point margin.
 - **Seed variation:** single-member metrics are reported as mean ± SD over 3 seeds, descriptive only.
 - External sets are never pooled with each other or with internal data. **No statistical equivalence is claimed** for any external result.
 
 ## 14. Multiplicity
 
-- **Primary:** one hypothesis, α = 0.05. No multiplicity adjustment is needed.
-- **Secondary families**, Holm-corrected **within each family only**:
+- **Primary:** one hypothesis (H-W), α = 0.05, two-sided 95% CI; supported if the CI lies entirely below 0 (§13). It is unchanged and needs no multiplicity adjustment.
+- **Secondary families**, each Holm-corrected **within the family only**, on the two-sided bootstrap p-values of §13 (A2):
 
-| Family | Contents |
-|---|---|
-| F1 | S1: ΔAURC_c for the 5 C5 conditions, internal. −T1c is reported as the key result. |
-| F2 | S8: mean within-condition ΔAURC on UPenn and on BraTS-Africa (2 tests). |
-| F3 | S7: unsafe-transfer Δrisk at 80% coverage on internal test, UPenn and BraTS-Africa (3 tests). |
-| F4 | S2: TC and WT mean within-condition ΔAURC (2 tests). |
-| F5 | S9: arm A ΔAURC_c for the 4 missing conditions (4 tests). |
+| Family | Contents | Claim rule |
+|---|---|---|
+| F1 | S1: ΔAURC_c for the 5 C5 conditions, internal (5 tests). −T1c is reported as the key result. | ΔAURC_c < 0 claimed if Holm-adjusted p < 0.05 and estimate < 0 |
+| F2 | S8: mean within-condition ΔAURC on UPenn and on BraTS-Africa (2 tests) | as F1 |
+| F3 | S7: Δrisk at q = 0.80 on internal test, UPenn and BraTS-Africa (3 tests) | "Unsafe transfer" if Holm-adjusted p < 0.05 **and** estimated Δrisk > 0 |
+| F3b | S7: Δcoverage at q = 0.80 on internal test, UPenn and BraTS-Africa (3 tests) | "Inefficient transfer" if Holm-adjusted p < 0.05 **and** estimated Δcoverage < 0 |
+| F4 | S2: TC and WT mean within-condition ΔAURC (2 tests) | as F1 |
+| F5 | S9: arm A ΔAURC_c for the 4 missing conditions (4 tests) | as F1 |
 
-- **No global FWER control across secondary families is claimed.** Secondary results are interpreted as supporting evidence.
+- The q = 0.70 and q = 0.90 transfer analyses are sensitivity analyses. They are reported with unadjusted 95% CIs and without inferential labels.
+- **Holm correction is within family only. No global FWER control across F1–F5 (including F3b) is claimed.** Secondary results are interpreted as supporting evidence.
 - Everything listed as descriptive, replication, supporting or exploratory is reported with CIs and without significance claims.
 
 ## 15. Confidence intervals
 
-- Patient bootstrap, 10,000 replicates, percentile method (BCa as a sensitivity analysis).
+- Patient-group bootstrap (§6.1), 10,000 replicates, percentile method (BCa as a sensitivity analysis).
 - 95% throughout.
 - Bootstrap seed `12345`.
 
@@ -285,7 +384,9 @@ Scores are computed per case and region r.
 | Bootstrap | 12345 |
 | Figure-case sampling | 7 |
 
-cuDNN / nnU-Net non-determinism is acknowledged.
+- The split seed randomizes **patient groups**, not cases (§6.3).
+- The §6.2 screen and the τ_q rule (§4 S7) are deterministic and use no random seed.
+- cuDNN / nnU-Net non-determinism is acknowledged.
 
 ## 17. Compute budget (ESTIMATES until EXP-001)
 
@@ -313,7 +414,9 @@ cuDNN / nnU-Net non-determinism is acknowledged.
 
 - The UPenn HOI set and BraTS-Africa are used **only** for final evaluation.
 - No training, tuning, threshold selection, indicator-risk estimation, calibration or checkpoint choice uses them.
+- τ_q is estimated on internal validation only and applied unchanged (§4 S7). I is estimated on internal validation only (§11).
 - Each set is evaluated once, with frozen code tagged `eval-v1`, and each is analysed separately.
+- HOI bootstrap uses patient groups from the §6.2 screen. BraTS-Africa subjects are treated as distinct patients.
 
 ## 19. Failure analysis
 
@@ -332,6 +435,7 @@ Counts are reported per condition and dataset. Figure cases are selected by rule
 - **SR3 (data).**
   - If the site-1 cases cannot be reproducibly identified from the crosswalk: drop the HOI set, use all 1,251 cases for development, and log the deviation.
   - If BraTS-Africa has fewer than 30 eligible labelled glioma cases: its analyses become descriptive only.
+  - If any §6.3 split-script assertion fails (site-1 case in development, development count ≠ 740 before grouping, or a patient group spanning partitions): stop, do not train, and log the deviation.
 - **SR4 (integrity).** Test sets are evaluated once with tagged code. Any re-evaluation is logged, and both results are reported.
 - **SR5 (bugs).** If a bug is found after evaluation: fix it, re-run everything affected, and report the deviation and both results.
 - **SR6 (projected total compute).** If EXP-001 projects total compute > 220 GPU-h, apply these reductions **in order**, re-projecting after each:
@@ -339,7 +443,7 @@ Counts are reported per condition and dataset. Figure cases are selected by rule
   2. Drop C15.
   3. Switch all six runs to 150 epochs.
   4. Consult the owner.
-- **SR7 (licensing).** If the BraTS licence does not permit the planned storage or re-hosting route (e.g. a private Kaggle dataset), halt compute until a compliant workflow is established (e.g. per-session download and preprocessing).
+- **SR7 (licensing).** If the BraTS licence or provider confirmation does not permit the planned storage or re-hosting route (e.g. a private Kaggle dataset), or if confirmation from TCIA has not been obtained, halt compute until a compliant workflow is established and approved by the owner (§5.1).
 - **SR8 (platform change).** If Kaggle hardware or quota changes materially, recompute the project budget before continuing.
 
 ## 21. Interpretation rules
@@ -351,7 +455,7 @@ Counts are reported per condition and dataset. Figure cases are selected by rule
 | H-W: CI entirely > 0 | Within-condition ranking is worse than chance. This is an important negative finding. |
 | −T1c component differs from the others | Reported as condition-dependent reliability. It is a supporting (F1) result, not a primary claim. |
 | External (F2) | The same wording, per dataset. Conclusions about transfer are made per dataset, never pooled. |
-| Transfer (F3) | "Unsafe transfer" / "inefficient transfer" only by the CI rules in S7. Otherwise "no evidence of unsafe/inefficient transfer". Never "equivalent". |
+| Transfer (F3, F3b) | "Unsafe transfer" only if the Holm-adjusted p < 0.05 and Δrisk > 0. "Inefficient transfer" only if the Holm-adjusted p < 0.05 and Δcoverage < 0 (S7, §14). Otherwise "no evidence of unsafe/inefficient transfer". Never "equivalent". |
 | Pooled analyses (S12–S13) | Descriptive. They must not override or substitute for the within-condition result. |
 | ECE/Brier (S4) | Consistency with published voxel-level findings (MMA-LTS). No novelty claim. |
 
@@ -360,17 +464,25 @@ Counts are reported per condition and dataset. Figure cases are selected by rule
 1. Missingness is **simulated by zeroing**. Real missing or degraded sequences are not studied.
 2. The HOI set shares BraTS curation and preprocessing, so the institutional shift is likely mild. BraTS-Africa is small (≤ 95 cases, and fewer per condition component), which gives wide CIs.
 3. The 250-epoch schedule is compute-limited. It is applied identically to both arms.
-4. The 3-member ensemble comes from a single split, so the variance of ensemble-level results over retraining is not estimable. With 3 members, pairwise Dice takes coarse values.
+4. The 3-member ensemble comes from a single split, so the variance of ensemble-level results over retraining is not estimable. U1 rests on only three pairwise comparisons. It is continuous in general but has mass points at 1 (all members empty) and 0 (discordant empty/non-empty members), so discordant tiny-ET predictions can create false alarms. It depends on the fixed 0.5 member threshold.
 5. Only pre-operative adult glioma is studied, with one architecture family.
 6. There is no MC-dropout and no post-hoc calibration. Missingness-conditioned calibration is outside scope (see MMA-LTS).
 7. Labels are expert-refined from automated pre-segmentations (BraTS, BraTS-Africa).
 8. The volume-failure thresholds are RANO 2.0-motivated proxies, not validated segmentation-error criteria.
-9. The threshold τ is fixed from the full validation set; its estimation variability is not propagated into the transfer CIs.
-10. Within-condition AURC on the internal test set uses about 148 patients per condition. Per-condition external estimates will be imprecise.
+9. The threshold τ_q is fixed from the full validation set, and its estimation variability is not propagated into the transfer CIs. Selection uses a discrete ≥-coverage rule, so the realized validation coverage can exceed the nominal q when U1 has ties.
+10. Within-condition AURC on the internal test set uses about 148 cases per condition. Per-condition external estimates will be imprecise.
+11. Patient identity is imperfectly observable for some BraTS 2021 cases (placeholder TCIA IDs). Two verified same-patient follow-up pairs (groups A and B, §6.1) require grouping. The label-only pre-split similarity screen (§6.2) is a safeguard, not a guarantee, against unidentified same-patient cases.
+12. Private third-party re-hosting of BraTS data remains pending provider (TCIA) confirmation (§5.1), which may constrain the compute route.
 
 ## 23. Novelty statement (conservative; re-check before submission)
 
 > To our knowledge, based on the search performed on 2026-09-27 (see `search_log.md`, rounds 1–3, and the unscreened sources listed in the pre-freeze checklist), prior work has established that segmentation accuracy and volumetry can be largely preserved under missing MRI sequences by per-subset or dropout-trained nnU-Nets [Ruffle et al. 2023; Öchsner et al. 2026; Pemberton et al. 2023; GlioMODA 2026]; that voxel-level calibration under missing-modality combinations is combination- and region-specific and can be improved by availability-conditioned post-hoc calibration [MMA-LTS, Lee et al., MICCAI 2026]; that region-wise calibration can be reported under missing modalities averaged over configurations [SimMLM/MoFe, Li et al. 2025]; that ensemble pairwise-Dice and related scores detect case-level segmentation failures with complete inputs [Zenk et al. 2025; BraTS-GoAT reliability study 2026]; and that pooled risk–coverage evaluation can reward between-group difficulty ordering rather than within-group detection [Joham et al., UNSURE 2026]. We did not identify a study that evaluates **case-level** reliability under missing MRI sequences, specifically whether uncertainty discriminates segmentation failures **within a fixed missing-sequence condition**, and whether that discrimination and the associated operating thresholds transfer to a held-out institution and an external population. This study is limited to that evaluation; it does not propose a new segmentation or calibration method.
+
+Operative summary of the claim (v0.3; wording unchanged in scope):
+
+> A pre-registered empirical evaluation of whether ensemble-disagreement confidence ranks case-level enhancing-tumour segmentation failures within fixed, simulated single-missing-sequence conditions for a modality-dropout nnU-Net, how this varies by which sequence is missing, and whether this ranking and a validation-derived operating threshold hold on a held-out institution and an external population.
+
+Prior complete-input literature suggests a positive primary result is plausible. The per-condition, external and transfer analyses carry the scientific weight.
 
 ## 24. Reproducibility plan
 
@@ -378,7 +490,7 @@ Counts are reported per condition and dataset. Figure cases are selected by rule
   - an `EXP-xxx` ID
   - git commit and config hash
   - nnU-Net version and plans file
-  - split file hashes and the crosswalk SHA-256
+  - split file hashes; the SHA-256 of the crosswalk and of `UCSF-PDGM-metadata_v5.csv` actually used; the §6.2 screen output (flagged pairs, decisions, final patient groups)
   - GPU, CUDA, PyTorch and Python versions
   - wall-clock time and peak memory
   - per-unit metric CSVs (patient, condition, region, metrics, U1/U2/U3 and I scores)
@@ -402,6 +514,7 @@ Counts are reported per condition and dataset. Figure cases are selected by rule
 | 2026-09-27 | v0.2 | §17, §20 | Compute re-estimated for the 511-case HOI; SR6–SR8 added | 13 §10 | No |
 | 2026-09-27 | v0.2 | §23 | Novelty statement rewritten to acknowledge MMA-LTS, SimMLM/MoFe, Joham 2026, Zenk 2025, BraTS-GoAT and the accuracy/volumetry literature | 13 §9 | No |
 | 2026-09-27 | v0.2 | checklist | Checklist replaced with the 7 open items from 13 §11 | Earlier items resolved or superseded (MoFe/PNDC correction, UPenn count, Africa count, RANO check) | No |
+| 2026-09-28 | v0.3 | §5–§7, §11, §13–§14, §16, §18, §22 and directly affected wording (header, checklist, §4 S7, §15, §20 SR3/SR7, §21, §23 summary, §24) | Added the patient-group split/bootstrap rule and the verified UCSF follow-up groups (A: 00626 + 00758; B: 00639 + 00557). Added the pre-split label-only same-patient screen (threshold and review procedure to be pre-specified before split creation). Resolved the secondary Holm/CI inconsistency (bootstrap p-values, Holm within family, F3b added for coverage). Defined deterministic U1 threshold tie handling (τ_q ≥ rule). Corrected the U1 limitation wording. Updated the BraTS 2021 licensing description and the private third-party re-hosting status. Corrected BraTS-Africa collection/version terminology. Updated limitations. Research question, H-W and primary endpoint **unchanged**. | [15_PREFREEZE_VERIFICATION_REPORT.md](15_PREFREEZE_VERIFICATION_REPORT.md) A1–A5; owner authorization 2026-09-28 | **No.** No test, held-out-institution or BraTS-Africa evaluation data were used. Only public identifier/metadata files were consulted. |
 
 ## Key references for revisions
 
