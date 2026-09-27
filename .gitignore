@@ -1,0 +1,46 @@
+# Medical data — never commit
+*.nii
+*.nii.gz
+*.dcm
+*.mha
+*.mhd
+*.nrrd
+*.h5
+*.hdf5
+*.npz
+*.npy
+*.pkl
+data/
+raw_data/
+nnUNet_raw/
+nnUNet_preprocessed/
+nnUNet_results/
+**/predictions/
+
+# Models / checkpoints
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+
+# Secrets
+.env
+*.key
+kaggle.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
