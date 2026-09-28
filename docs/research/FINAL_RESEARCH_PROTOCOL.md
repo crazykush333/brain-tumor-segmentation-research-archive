@@ -229,15 +229,23 @@ Any case with a real TCIA patient ID shared with another case is also grouped. N
 
 ### 6.2 Pre-split label-only same-patient screen (safeguard for unidentified duplicates)
 
-This screen uses **only** ground-truth labels and image metadata available before any model training. It never uses predictions, test results, calibration results or any other outcome of the study.
+**Purpose and scope.** This screen is a **leakage-prevention safeguard**. It is **not** a substitute for complete patient-identity metadata, and it **cannot guarantee** detection of every same-patient relationship (for example, when follow-up anatomy or labels change substantially).
 
-1. For every pair of development cases, compute the **WT-label Dice** between their ground-truth WT masks. All BraTS cases are in the same SRI24 space, so no registration is performed.
-2. Flag pairs with WT-label Dice ≥ **T_screen**. **T_screen = TO BE PRE-SPECIFIED BEFORE SPLIT CREATION.** No defensible value is documented in the project sources, so none is chosen here.
-3. **Manual review** of each flagged pair confirms or rejects a same-patient relationship. The review procedure (reviewer, material inspected, decision rule, recording of reasons) = **TO BE PRE-SPECIFIED BEFORE SPLIT CREATION**.
-4. Confirmed pairs are merged into patient groups, transitively.
-5. T_screen and the review procedure are recorded in this protocol and frozen **before** the final split is created (checklist item 7). The screen output (flagged pairs, decisions, final groups; IDs only) is committed.
+**Permitted inputs:** only ground-truth WT labels and permitted pre-split metadata (the TCIA crosswalk and TCIA collection metadata such as `UCSF-PDGM-metadata_v5.csv`). The screen never uses model predictions, segmentation performance, test results, calibration results, or any information generated after the split.
 
-The same screen is applied **within the HOI set (511 cases)** only to define bootstrap patient groups. There, it has no effect on training.
+Procedure, in this order:
+
+1. **Inputs.** Use only the ground-truth WT labels of the development cases (and, separately, of the HOI cases; see below) and the permitted metadata.
+2. **Comparison.** Compare every unordered pair of development cases by the **WT-label Dice** of their ground-truth WT masks. All BraTS cases are in the same SRI24 space, so no registration is performed.
+3. **Flagging.** Flag pairs with WT-label Dice ≥ **T_screen**, using the frozen value once approved.
+   - **T_screen = TO BE PRE-SPECIFIED BEFORE SPLIT CREATION.**
+   - No defensible, directly applicable value is documented in the project sources (searched 2026-09-28), so none is chosen here. No arbitrary value is substituted.
+4. **Manual review.** Each flagged pair is confirmed or rejected as a same-patient relationship by a pre-specified procedure.
+   - The **review procedure** (reviewer, material inspected, decision rule, recording of reasons) = **TO BE PRE-SPECIFIED BEFORE SPLIT CREATION**.
+5. **Grouping.** Confirmed same-patient pairs are merged into patient groups **transitively**, together with the verified groups A and B and any shared real TCIA IDs (§6.1).
+6. **Freeze, then split.** T_screen, the review procedure and the resulting patient grouping are recorded in this protocol and frozen **before** the final split is created (checklist item 7). The screen output (flagged pairs, decisions, final groups; IDs only) is committed. **Only after the grouping is frozen may the 70/10/20 patient-group split (§6.3) be performed.**
+
+The same screen, with the same frozen T_screen and review procedure, is applied **within the HOI set (511 cases)** only to define bootstrap patient groups. There, it has no effect on training.
 
 BraTS-Africa subjects are treated as distinct patients, per the TCIA description of 146 patients.
 
@@ -301,7 +309,7 @@ Scores are computed per case and region r.
 - **U1 (primary):** mean pairwise Dice between the three members' binary masks for r (each member thresholded at 0.5). Both empty → 1.
   - Properties (A3):
     - three members give only three pairwise comparisons;
-    - U1 is continuous in general;
+    - U1 can take many distinct values, but is discrete because it is computed from finite binary masks;
     - it has a mass point at **1** when all members predict an empty region;
     - it has mass at **0** when at least one member predicts empty and another predicts non-empty;
     - discordant tiny-ET predictions can therefore produce false alarms;
@@ -464,7 +472,7 @@ Counts are reported per condition and dataset. Figure cases are selected by rule
 1. Missingness is **simulated by zeroing**. Real missing or degraded sequences are not studied.
 2. The HOI set shares BraTS curation and preprocessing, so the institutional shift is likely mild. BraTS-Africa is small (≤ 95 cases, and fewer per condition component), which gives wide CIs.
 3. The 250-epoch schedule is compute-limited. It is applied identically to both arms.
-4. The 3-member ensemble comes from a single split, so the variance of ensemble-level results over retraining is not estimable. U1 rests on only three pairwise comparisons. It is continuous in general but has mass points at 1 (all members empty) and 0 (discordant empty/non-empty members), so discordant tiny-ET predictions can create false alarms. It depends on the fixed 0.5 member threshold.
+4. The 3-member ensemble comes from a single split, so the variance of ensemble-level results over retraining is not estimable. U1 rests on only three pairwise comparisons. It can take many distinct values but is discrete (computed from finite binary masks), and it has mass points at 1 (all members empty) and 0 (discordant empty/non-empty members), so discordant tiny-ET predictions can create false alarms. It depends on the fixed 0.5 member threshold.
 5. Only pre-operative adult glioma is studied, with one architecture family.
 6. There is no MC-dropout and no post-hoc calibration. Missingness-conditioned calibration is outside scope (see MMA-LTS).
 7. Labels are expert-refined from automated pre-segmentations (BraTS, BraTS-Africa).
@@ -515,6 +523,7 @@ Prior complete-input literature suggests a positive primary result is plausible.
 | 2026-09-27 | v0.2 | §23 | Novelty statement rewritten to acknowledge MMA-LTS, SimMLM/MoFe, Joham 2026, Zenk 2025, BraTS-GoAT and the accuracy/volumetry literature | 13 §9 | No |
 | 2026-09-27 | v0.2 | checklist | Checklist replaced with the 7 open items from 13 §11 | Earlier items resolved or superseded (MoFe/PNDC correction, UPenn count, Africa count, RANO check) | No |
 | 2026-09-28 | v0.3 | §5–§7, §11, §13–§14, §16, §18, §22 and directly affected wording (header, checklist, §4 S7, §15, §20 SR3/SR7, §21, §23 summary, §24) | Added the patient-group split/bootstrap rule and the verified UCSF follow-up groups (A: 00626 + 00758; B: 00639 + 00557). Added the pre-split label-only same-patient screen (threshold and review procedure to be pre-specified before split creation). Resolved the secondary Holm/CI inconsistency (bootstrap p-values, Holm within family, F3b added for coverage). Defined deterministic U1 threshold tie handling (τ_q ≥ rule). Corrected the U1 limitation wording. Updated the BraTS 2021 licensing description and the private third-party re-hosting status. Corrected BraTS-Africa collection/version terminology. Updated limitations. Research question, H-W and primary endpoint **unchanged**. | [15_PREFREEZE_VERIFICATION_REPORT.md](15_PREFREEZE_VERIFICATION_REPORT.md) A1–A5; owner authorization 2026-09-28 | **No.** No test, held-out-institution or BraTS-Africa evaluation data were used. Only public identifier/metadata files were consulted. |
+| 2026-09-28 | v0.3 (clarification, no version change) | §6.2, §11, §22 (item 4) | **U1 wording:** "continuous in general" replaced by "can take many distinct values, but is discrete because it is computed from finite binary masks" (no change to the U1 definition, the 0.5 threshold, empty-mask handling or the τ_q rule). **§6.2 wording:** the screen is made explicit as an ordered, label-only, pre-split procedure: permitted inputs; all development pairs; flagging with the frozen T_screen; pre-specified manual review; transitive grouping; freeze before the split. It is stated to be a safeguard that cannot guarantee complete duplicate detection. **T_screen and the review procedure remain TO BE PRE-SPECIFIED BEFORE SPLIT CREATION** (no project source supports a value; none invented). | Owner instruction 2026-09-28 (technical precision; A1 explicitness) | **No.** No data accessed; no experiment run. |
 
 ## Key references for revisions
 

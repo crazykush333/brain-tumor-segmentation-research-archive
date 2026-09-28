@@ -20,6 +20,15 @@
 | **A4** | "Synapse / TCIA Restricted License Agreement" is outdated. Private re-hosting was unresolved. | TCIA challenge package listed as CC BY 4.0. Synapse access authenticated under Synapse terms. TCIA Data Usage Policy and citations apply. "Private third-party re-hosting (including private Kaggle dataset storage) requires confirmation from TCIA before use." No public Kaggle mirror. Data route pending owner confirmation. No legal conclusion. | Accuracy of access and licence terms | TCIA BraTS 2021 page; TCIA Data Usage Policy; Synapse "Rules & Resources" | §5.1, checklist item 5, §20 SR7, §22 (12) | No |
 | **A5** | "BraTS-Africa, TCIA v2 release" is inaccurate. | Changed to "TCIA BraTS-Africa collection (Version 1, updated 2024-09-04; metadata file `BraTS-Africa_TCIA_datainfo_v2.xlsx`)". Kept: 95 Glioma / 51 OtherNeoplasms, ≤ 95 eligible, 4 sequences, expected labels 1 = NETC / 2 = SNFH / 3 = ET, and cases with fewer than 3 sub-regions (possible ET absence). A metadata-vs-file-level verification table was added. | Factual correction | TCIA BraTS-Africa collection page and metadata | §5 table, §5.2, §5 notes, checklist item 4 | No |
 
+## Minor v0.3 clarification (2026-09-28; no version change)
+
+This is separate from A1–A5 and is not a new amendment.
+
+- **U1 wording (§11, §22 item 4).** The phrase "U1 is continuous in general" is technically imprecise. It now reads "U1 can take many distinct values, but is discrete because it is computed from finite binary masks". The U1 definition, both-empty = 1, empty/non-empty → 0, the fixed 0.5 member threshold and the τ_q ≥ rule (no interpolation, no random tie-breaking, validation-only estimation) are unchanged. *(The A3 row above still paraphrases the earlier wording "continuous"; this clarification supersedes it.)*
+- **A1 wording (§6.2).** The screen is rewritten as an explicit ordered procedure, stated to be a leakage-prevention safeguard that is not a substitute for patient-identity metadata and cannot guarantee complete duplicate detection. The split may occur only after the grouping is frozen.
+- **Not resolved:** **T_screen** and the **manual-review procedure** remain **TO BE PRE-SPECIFIED BEFORE SPLIT CREATION**. A search of the project documents (2026-09-28) found no defensible, directly applicable threshold, so none was invented.
+- Test data seen: **No.**
+
 ## Remaining unresolved (unchanged by v0.3)
 
 - The BrainLes/BraTS 2024 LNCS volume (partially closed; waiver or re-screen).
