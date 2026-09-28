@@ -1,5 +1,8 @@
 # 16 — Protocol v0.3 Changelog
 
+> **Superseded:** the protocol is now v0.4. See [17_V0.3_TO_V0.4_CHANGELOG.md](17_V0.3_TO_V0.4_CHANGELOG.md). This file records the v0.3 amendment only.
+
+
 | Field | Value |
 |---|---|
 | Protocol | [FINAL_RESEARCH_PROTOCOL.md](FINAL_RESEARCH_PROTOCOL.md) |

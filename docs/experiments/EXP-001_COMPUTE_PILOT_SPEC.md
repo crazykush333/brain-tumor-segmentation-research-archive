@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Status | **Specification only. Not authorized to run.** |
-| Protocol | [FINAL_RESEARCH_PROTOCOL.md](../research/FINAL_RESEARCH_PROTOCOL.md) v0.2 (pre-freeze), §17.2, SR1, SR6–SR8 |
+| Protocol | [FINAL_RESEARCH_PROTOCOL.md](../research/FINAL_RESEARCH_PROTOCOL.md) v0.4 (pre-freeze), lifecycle gate D, §17.2, SR1, SR6–SR8 |
 | Prepared | 2026-09-28 |
 | Purpose | Replace the compute **ESTIMATES** in §17 with measurements, and decide SR1/SR6 **before** v1.0. |
 | Not a purpose | Any accuracy, calibration or reliability result. EXP-001 produces **no scientific findings**. |
@@ -12,7 +12,13 @@
 
 1. Owner authorization of EXP-001.
 2. Owner-approved data-acquisition and storage route (checklist item 5 / SR7). Credentials are handled as notebook secrets and never committed.
-3. Amendment A1 resolved (patient grouping), so the pilot subset can be drawn without pre-empting the split.
+3. **A1 condition (protocol v0.4, gates D3–D5).** "A1 resolved" means, for EXP-001 only:
+   - the pilot uses only site ≠ 1 development cases;
+   - it computes no label-based scientific metrics;
+   - it does not require the final scientific split;
+   - it cannot alter the final analysis (pilot models are discarded, and no pilot output feeds any threshold, grouping or split decision).
+
+   Completion of the §6.2 patient-grouping gate is **not** required for EXP-001.
 4. Pinned software: nnU-Net v2 version, PyTorch, CUDA and Python recorded. The same versions are intended for the main study.
 
 ## 1. Workload
