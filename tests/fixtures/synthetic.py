@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -64,3 +66,44 @@ def synthetic_units(
                 risk.append(r)
                 u1.append(float(np.clip(signal * (1 - r) + (1 - signal) * 0.5 + noise, 0, 1)))
     return UnitTable.from_columns(case_id, group_id, cond, risk, {"U1": u1})
+
+
+def write_synthetic_nifti(
+    path: str | Path,
+    shape: tuple[int, ...] = (4, 4, 3),
+    *,
+    version: int = 1,
+    endian: str = "<",
+    gz: bool = True,
+) -> Path:
+    """Write a tiny all-zero NIfTI file (synthetic; test temp directories only)."""
+    import gzip
+    import struct
+
+    ndim = len(shape)
+    dims = [ndim, *shape] + [1] * (7 - ndim)
+    n_vox = int(np.prod(shape))
+    if version == 1:
+        hdr = bytearray(348)
+        struct.pack_into(f"{endian}i", hdr, 0, 348)
+        struct.pack_into(f"{endian}8h", hdr, 40, *dims)
+        struct.pack_into(f"{endian}h", hdr, 70, 2)  # uint8
+        struct.pack_into(f"{endian}h", hdr, 72, 8)
+        struct.pack_into(f"{endian}f", hdr, 108, 352.0)
+        hdr[344:348] = b"n+1\x00"
+        payload = bytes(hdr) + b"\x00" * 4 + b"\x00" * n_vox
+    else:
+        hdr = bytearray(540)
+        struct.pack_into(f"{endian}i", hdr, 0, 540)
+        hdr[4:12] = b"n+2\x00\r\n\x1a\n"
+        struct.pack_into(f"{endian}h", hdr, 12, 2)
+        struct.pack_into(f"{endian}8q", hdr, 16, *dims)
+        payload = bytes(hdr) + b"\x00" * 4 + b"\x00" * n_vox
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    if gz:
+        with gzip.open(p, "wb") as fh:
+            fh.write(payload)
+    else:
+        p.write_bytes(payload)
+    return p

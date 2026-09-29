@@ -15,6 +15,9 @@ layout:
   modality_suffixes: {T1: "_t1", T1c: "_t1ce", T2: "_t2", FLAIR: "_flair"}
   label_suffix: "_seg"
   file_ending: ".nii.gz"
+  # Expected volume shape. Deliberately unset: set it only after confirming the
+  # shape on the acquired files at B5 (mismatches are then reported as warnings).
+  expected_shape: null
 
 labels:
   values: [0, 1, 2, 4]
@@ -22,6 +25,7 @@ labels:
 
 crosswalk:
   file: "BraTS2021_MappingToTCIA.xlsx"   # licensed metadata: never committed; SHA-256 recorded at B3
+  sheet: null                             # first worksheet unless confirmed otherwise at B3
   sha256: null                            # recorded from the actual file at B3; never typed by hand
   # Column headers as recorded in docs/research/15_PREFREEZE_VERIFICATION_REPORT.md.
   # Re-confirm against the hashed file at B3.

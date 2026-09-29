@@ -24,8 +24,12 @@ def _b(n: int) -> list[str]:
 _D_ALL = [f"D{i}" for i in range(1, 7)]
 
 ACTION_REQUIREMENTS: dict[str, list[str]] = {
-    "acquire_data": ["B1"],
-    "build_manifest": _b(2),
+    "acquire_data": ["B1"],  # B2: record acquisition via the approved route
+    "record_crosswalk_hash": _b(2),  # B3
+    "record_ucsf_metadata_hash": _b(3),  # B4
+    "build_manifest": _b(4),  # B5
+    "validate_data": _b(2),  # integrity checks on acquired files (supports B5)
+    "derive_counts": _b(5),  # B6
     "compute_t_screen": _b(6),
     "pairwise_screen": _b(6),
     "freeze_patient_groups": _b(8),

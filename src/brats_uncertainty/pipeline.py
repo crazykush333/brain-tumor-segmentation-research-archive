@@ -1,4 +1,6 @@
-"""Gated pipeline stages for gates B5-B12 (data manifest -> grouping -> split).
+"""Gated pipeline stages for gates B7-B12 (same-patient screen -> grouping -> split).
+
+The data-gate stages B2-B6 live in ``brats_uncertainty.data.stages``.
 
 Every stage calls ``require_action`` first and therefore fails with
 ``ResearchGateError`` until the preceding protocol gates are legitimately
@@ -17,8 +19,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from brats_uncertainty.data.crosswalk import CrosswalkRow, derive_cohorts, shared_tcia_id_groups
-from brats_uncertainty.data.manifest import Manifest, build_manifest
-from brats_uncertainty.data.schema import load_schema
+from brats_uncertainty.data.manifest import Manifest
 from brats_uncertainty.errors import DataValidationError
 from brats_uncertainty.evaluation.guards import require_action
 from brats_uncertainty.grouping.groups import PatientGrouping, build_groups
@@ -49,15 +50,6 @@ def load_label(path: Path) -> NDArray[np.integer]:
 
 def wt_mask(label: NDArray[np.integer]) -> NDArray[np.bool_]:
     return np.isin(label, BRATS2021_REGIONS["WT"])
-
-
-def stage_build_manifest(
-    repo_root: Path, dataset_config: Path, data_root: Path, out: Path
-) -> Manifest:
-    require_action("build_manifest", repo_root)
-    manifest = build_manifest(data_root, load_schema(dataset_config))
-    write_json(out, {**manifest.to_dict(), "manifest_sha256": manifest.sha256})
-    return manifest
 
 
 def _label_paths(manifest: Manifest, data_root: Path) -> dict[str, tuple[Path, str]]:

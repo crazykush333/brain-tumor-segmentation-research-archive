@@ -33,6 +33,12 @@ PROHIBITED_SUFFIXES = (
     ".onnx",
     ".pem",
     ".key",
+    ".zip",
+    ".tar",
+    ".tgz",
+    ".7z",
+    ".xlsx",
+    ".xls",
 )
 PROHIBITED_NAMES = (
     "kaggle.json",

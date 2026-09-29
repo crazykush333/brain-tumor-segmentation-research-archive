@@ -1,28 +1,92 @@
-# Data provenance
+# Data provenance and reproduction of gates B2–B6
 
-**Status: no provenance records exist yet, because no data have been acquired.** Nothing below may be filled in by hand. Every value is produced by the code from the actual files at the stated gate.
+**Status (2026-09-29): no provenance records exist, because no data have been acquired (B1 PENDING).** Nothing below may be filled in by hand. Every hash, count and ID list is produced by the code from the actual files at the stated gate.
 
-## What will be recorded, and when
+## 1. Four zones
 
-| Gate | Record | Produced by | Committed? |
-|---|---|---|---|
-| B1 | Approved data route and evidence reference (e.g. the TCIA reply) | owner | Yes (reference only) |
-| B2 | Acquisition date, source, route, acquirer | `DatasetProvenance` | Yes |
-| B3 | SHA-256 of `BraTS2021_MappingToTCIA.xlsx` as used | `sha256_file` | Hash only |
-| B4 | SHA-256 of `UCSF-PDGM-metadata_v5.csv` as used | `sha256_file` | Hash only |
-| B5 | Data manifest: case ID, relative path, size and SHA-256 per file; manifest hash | `build-manifest` | Manifest summary and hash; per-file manifest only if the licence permits |
-| B6 | Counts re-derived from the hashed crosswalk (expected 1,251 / 511 / 740; SR3 on mismatch) | `derive_cohorts` | Yes |
-| B7 | T_screen record: value, positive-control Dice values, label hashes | `compute_t_screen` | Yes |
-| B7–B9 | Flagged pair IDs, review CSV (IDs, decision, reviewer, timestamp, reason), grouping audit | `grouping/*` | Yes (IDs only) |
-| B10–B12 | Split CSV (IDs, group IDs, partitions), strata counts, SHA-256 hashes | `splitting/split.py` | Yes (IDs only) |
-| C1–C3 | BraTS-Africa label/sequence verification and eligible count | owner + code | Yes |
-| C4 | HOI patient grouping (same §6.2 rule and T_screen value) | `grouping/*` | Yes (IDs only) |
+| Zone | What lives there | Leaves the zone? |
+|---|---|---|
+| **PUBLIC REPOSITORY** (this git repo) | code, configs, frozen protocol, documentation, status, the website, and (after each gate closes) owner-reviewed derived public artifacts | public |
+| **PRIVATE RESEARCH DATA** | official BraTS 2021 / BraTS-Africa files (NIfTI, labels), the crosswalk XLSX, the UCSF-PDGM metadata CSV, full manifests, integrity reports. Stored under the git-ignored `data/` tree or in the B1-approved compute storage | **never** enters git or any unapproved location |
+| **COMPUTE ENVIRONMENT** | the machine or notebook where gated commands run. It clones a **tagged or committed** revision of this repository; credentials come from the platform's secret store; data arrive only via the approved route | only records (JSON: IDs, hashes, counts) are copied back for owner review |
+| **DERIVED PUBLIC ARTIFACTS** | per gate, after owner review: file names, sizes and SHA-256 (B2–B4); the manifest hash and summary (B5); counts and ID-list hashes (B6); later the ID-only groups and split files (B9–B12) | committed as administrative entries (`docs/research/protocol-amendments/`) |
 
-Each record is also appended to protocol §25 as an **administrative entry** via [protocol-amendments/](../research/protocol-amendments/README.md). Such entries do not change the design.
+Licensed metadata files and images are never derived public artifacts. Whether per-file manifests (case IDs plus hashes) may be published is decided at B5 under the data licence. The default is to publish only the manifest hash and summary.
 
-## Provenance guarantees built into the code
+## 2. What each record contains
 
-- Hashes come only from bytes read from disk (`utils/hashing.py`). No API accepts a typed hash as a measurement.
-- `DatasetProvenance.validate()` rejects empty fields and malformed hashes.
-- Every result artifact carries the experiment ID, git commit, config hash, protocol hash and input hashes (`results/artifacts.py`). Tampering is detected by a content hash.
-- Synthetic test data are labelled `synthetic: true` and refused in `results/` and by the website export.
+Every record carries a **provenance stamp** (`brats_uncertainty.data.records.ProvenanceStamp`):
+
+- creation time (UTC);
+- the exact **code commit**, and whether the tree was clean (commands refuse to run from a dirty or uncommitted tree);
+- package version;
+- **protocol version** and protocol SHA-256;
+- the captured **environment**: Python, platform, package versions, GPU if any.
+
+| Gate | Command | Record fields (in addition to the stamp) |
+|---|---|---|
+| B2 | `record-acquisition` | exact source: dataset, **dataset version** as shown on the official page, **DOI**, **source URL**, **route** (must equal the B1-approved route); **acquisition date**; acquirer; for each acquired file its **file name**, size and **SHA-256** |
+| B3 | `hash-metadata --gate B3` | file name must be exactly `BraTS2021_MappingToTCIA.xlsx`; size; SHA-256; source URL; DOI |
+| B4 | `hash-metadata --gate B4` | file name must be exactly `UCSF-PDGM-metadata_v5.csv`; size; SHA-256; source URL; DOI |
+| B5 | `validate-data`, then `build-manifest` | **manifest version** (schema 1); manifest SHA-256; case count; integrity report (errors and warnings); per case: relative paths, sizes, SHA-256 of 4 modalities and the label |
+| B6 | `derive-counts` | crosswalk SHA-256 recomputed and compared with the B3 record; derived counts and protocol targets (1,251 / 511 / 740); site-1 rule; SHA-256 of the sorted development and held-out-institution ID lists; status `PASSED` or `FAILED_SR3` |
+
+Record classes validate themselves: malformed hashes, empty fields, wrong file names, non-https sources, a route not approved at B1, and inconsistent B6 status all raise errors. There is no API for entering a hash by hand.
+
+## 3. How to reproduce B2–B6 (future researcher)
+
+You do **not** receive patient data from GitHub. You obtain it yourself from the official provider.
+
+1. Clone the repository at the commit named in the published records:
+   - `git checkout <code_commit>`
+   - `pip install -e ".[dev,io]"`
+   - `brats-uncertainty verify-protocol`
+2. Obtain access under the providers' terms and the route documented in the closed B1 record. Acquire the files into `data/raw/` (run `brats-uncertainty init-data-dirs` first).
+3. **B2.** Record what was acquired:
+
+   ```
+   brats-uncertainty record-acquisition \
+     --dataset RSNA-ASNR-MICCAI-BraTS-2021 --dataset-version "<as on the official page>" \
+     --doi 10.7937/jc8x-9874 \
+     --source-url https://www.cancerimagingarchive.net/analysis-result/rsna-asnr-miccai-brats-2021/ \
+     --route "<B1-approved route>" --acquisition-date YYYY-MM-DD --acquired-by "<name>" \
+     --out data/manifests/B2_acquisition.json data/raw/<acquired files...>
+   ```
+
+4. **B3 and B4.** Hash the metadata files:
+   - `brats-uncertainty hash-metadata --gate B3 --file data/raw/BraTS2021_MappingToTCIA.xlsx --source-url <page> --doi 10.7937/jc8x-9874 --out data/manifests/B3_crosswalk.json`
+   - the same with `--gate B4` for `UCSF-PDGM-metadata_v5.csv`, using the UCSF-PDGM collection page and its DOI.
+5. **B5.**
+   - `brats-uncertainty validate-data --dataset-config configs/dataset/brats2021.yaml --data-root <extracted training folder> --out data/manifests/B5_integrity.json`
+   - `brats-uncertainty build-manifest --dataset-config configs/dataset/brats2021.yaml --data-root <same> --out data/manifests/B5_manifest.json`
+6. **B6.** `brats-uncertainty derive-counts --crosswalk data/raw/BraTS2021_MappingToTCIA.xlsx --b3-record data/manifests/B3_crosswalk.json --out data/manifests/B6_counts.json`
+7. **Compare** your hashes and counts with the published derived artifacts. Identical SHA-256 values mean you hold byte-identical inputs.
+
+Each command runs only when the preceding gates are CLOSED in `docs/project_status.yaml`. In a reproduction, the published status already shows them CLOSED with evidence.
+
+Configuration that must be confirmed on the real files (recorded, never assumed):
+
+- the dataset file naming and `expected_shape` in `configs/dataset/brats2021.yaml`;
+- the crosswalk column headers (from report 15; re-checked at B3/B6).
+
+## 4. Integrity checks (`brats_uncertainty.data.integrity`)
+
+The integrity audit checks:
+
+- expected files exist, and file names follow the dataset schema;
+- all four modalities are present, and label files are available;
+- there are no duplicate or colliding case IDs, and the found case IDs match the expected ones;
+- there are no unexpected files;
+- no file is corrupt (full gzip CRC read plus a NIfTI-1/2 header check, without loading voxels);
+- each case's modalities and label have the same dimensions, and they are 3-D;
+- file hashes match an existing manifest.
+
+It returns a report of all issues. `build-manifest` refuses to write a manifest while the report has errors.
+
+## 5. Current state
+
+| Gate | State | Record |
+|---|---|---|
+| B1 | PENDING | [B1_DATA_ROUTE_AUTHORIZATION.md](B1_DATA_ROUTE_AUTHORIZATION.md) |
+| B2–B6 | NOT STARTED | none |
+| B7–B12 | LOCKED (pending B1–B6) | none |

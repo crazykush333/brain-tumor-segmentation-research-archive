@@ -21,7 +21,7 @@ def make_status_repo(tmp_path: Path, closed: set[str]) -> Path:
     placeholders inside the temporary directory.
     """
     raw = yaml.safe_load((REPO_ROOT / "docs/project_status.yaml").read_text(encoding="utf-8"))
-    (tmp_path / "evidence").mkdir()
+    (tmp_path / "evidence").mkdir(parents=True)
     ev = tmp_path / "evidence" / "gate.md"
     ev.write_text("synthetic test evidence\n", encoding="utf-8")
     (tmp_path / "docs/research").mkdir(parents=True)
@@ -30,10 +30,19 @@ def make_status_repo(tmp_path: Path, closed: set[str]) -> Path:
         "docs/research/19_GATE_A_CLOSURE_AUDIT.md",
     ):
         shutil.copy(REPO_ROOT / rel, tmp_path / rel)
+    (tmp_path / "configs/protocol").mkdir(parents=True)
+    shutil.copy(REPO_ROOT / "configs/protocol/protocol_v1.0.yaml", tmp_path / "configs/protocol/")
     for g in raw["gates"]:
         if g["id"] in closed:
             g["status"] = "CLOSED"
             g["evidence"] = "evidence/gate.md"
             g["closed_on"] = "2000-01-01"
+    if all(f"B{i}" in closed for i in range(1, 7)):
+        for g in raw["gates"]:
+            if g["status"] == "LOCKED":
+                g["status"] = "NOT_STARTED"
+    if "B1" in closed:
+        raw["data"]["authorization"] = "APPROVED"
+        raw["data"]["approved_route"] = "SYNTHETIC-TEST-ROUTE"
     (tmp_path / "docs/project_status.yaml").write_text(yaml.safe_dump(raw), encoding="utf-8")
     return tmp_path

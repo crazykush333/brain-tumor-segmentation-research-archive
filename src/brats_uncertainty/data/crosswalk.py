@@ -12,6 +12,8 @@ by collection name. Count mismatches raise (SR3).
 
 from __future__ import annotations
 
+import csv
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,18 +41,46 @@ def _norm_site(value: Any) -> str:
         raise DataValidationError("missing site ID")
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
-    return str(value).strip()
+    s = str(value).strip()
+    if not s:
+        raise DataValidationError("missing site ID")
+    if re.fullmatch(r"\d+\.0+", s):
+        s = s.split(".")[0]
+    return s
+
+
+REQUIRED_COLUMN_KEYS = ("case_id", "site_id", "collection", "tcia_subject_id")
 
 
 def parse_rows(
-    records: Iterable[Mapping[str, Any]], columns: Mapping[str, str]
+    records: Iterable[Mapping[str, Any]],
+    columns: Mapping[str, str],
+    *,
+    case_id_pattern: str | None = None,
 ) -> list[CrosswalkRow]:
-    """Convert raw records (dicts keyed by spreadsheet header) to typed rows."""
+    """Convert raw records (dicts keyed by spreadsheet header) to typed rows.
+
+    Malformed metadata fails loudly: missing configured columns, missing site
+    IDs, case IDs not matching ``case_id_pattern`` and duplicate case IDs.
+    """
+    missing_keys = [k for k in REQUIRED_COLUMN_KEYS if not columns.get(k)]
+    if missing_keys:
+        raise DataValidationError(f"crosswalk column mapping incomplete: {missing_keys}")
+    records = list(records)
+    if not records:
+        raise DataValidationError("crosswalk contains no records")
+    header = set().union(*(r.keys() for r in records))
+    absent = sorted(columns[k] for k in REQUIRED_COLUMN_KEYS if columns[k] not in header)
+    if absent:
+        raise DataValidationError(f"crosswalk is missing expected columns: {absent}")
+    pattern = re.compile(case_id_pattern) if case_id_pattern else None
     rows: list[CrosswalkRow] = []
     for rec in records:
         case = rec.get(columns["case_id"])
         if case is None or str(case).strip() == "":
             continue  # blank spreadsheet row
+        if pattern and not pattern.fullmatch(str(case).strip()):
+            raise DataValidationError(f"malformed case ID in crosswalk: {str(case)!r}")
         tcia = rec.get(columns["tcia_subject_id"])
         rows.append(
             CrosswalkRow(
@@ -64,6 +94,19 @@ def parse_rows(
     if len(ids) != len(set(ids)):
         raise DataValidationError("duplicate case IDs in crosswalk")
     return rows
+
+
+def read_table_records(path: str | Path, sheet: str | None = None) -> list[dict[str, Any]]:
+    """Read ``.xlsx`` (requires the ``io`` extra) or ``.csv`` into header-keyed dicts."""
+    p = Path(path)
+    if not p.is_file():
+        raise DataValidationError(f"metadata file not found: {p}")
+    if p.suffix.lower() == ".csv":
+        with p.open(encoding="utf-8-sig", newline="") as fh:
+            return [dict(r) for r in csv.DictReader(fh)]
+    if p.suffix.lower() == ".xlsx":
+        return read_xlsx_records(p, sheet)
+    raise DataValidationError(f"unsupported metadata format: {p.suffix}")
 
 
 def read_xlsx_records(path: str | Path, sheet: str | None = None) -> list[dict[str, Any]]:

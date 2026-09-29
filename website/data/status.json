@@ -1,4 +1,11 @@
 {
+  "data": {
+    "acquired": false,
+    "approved_route": null,
+    "authorization": "PENDING",
+    "inquiry_sent": false,
+    "statement": "No study imaging or label-volume data have been downloaded."
+  },
   "gate_groups": {
     "A": "v1.0 freeze blockers",
     "B": "Post-freeze / pre-split data gates",
@@ -115,42 +122,42 @@
       "closed_on": null,
       "group": "B",
       "id": "B7",
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "T_screen computed from positive controls; pairwise screen run"
     },
     {
       "closed_on": null,
       "group": "B",
       "id": "B8",
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "Flagged pairs manually reviewed"
     },
     {
       "closed_on": null,
       "group": "B",
       "id": "B9",
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "Patient groups frozen and committed (IDs only)"
     },
     {
       "closed_on": null,
       "group": "B",
       "id": "B10",
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "Final split created once"
     },
     {
       "closed_on": null,
       "group": "B",
       "id": "B11",
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "Split assertions pass"
     },
     {
       "closed_on": null,
       "group": "B",
       "id": "B12",
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "Split hashes recorded"
     },
     {
@@ -241,9 +248,59 @@
   "headline": "Protocol v1.0 frozen. Experimental execution pending.",
   "last_updated": "2026-09-29",
   "next_step": {
-    "description": "Obtain TCIA confirmation on private third-party re-hosting of BraTS 2021 data (or an owner-approved alternative data route), per protocol §5.1 and SR7. No data acquisition or compute may begin before B1 is closed.",
+    "description": "Obtain and record written data-route confirmation before B2 data acquisition: send the prepared TCIA inquiry (docs/data/TCIA_DATA_ROUTE_INQUIRY.md) or record an explicit owner-approved alternative route, per protocol §5.1 and SR7. No data acquisition or compute may begin before B1 is closed.",
     "gate": "B1"
   },
+  "overview": [
+    {
+      "detail": "frozen 2026-09-28, tag protocol-v1.0",
+      "key": "protocol",
+      "label": "Protocol v1.0",
+      "status": "FROZEN"
+    },
+    {
+      "detail": "written data-route confirmation required before any data acquisition",
+      "key": "b1",
+      "label": "B1 Data authorization",
+      "status": "PENDING"
+    },
+    {
+      "detail": "gates B2-B6: acquisition, hashes, manifest, counts",
+      "key": "data",
+      "label": "Data acquisition",
+      "status": "NOT_STARTED"
+    },
+    {
+      "detail": "gates B7-B9: same-patient screen, manual review, patient groups",
+      "key": "grouping",
+      "label": "Patient grouping",
+      "status": "LOCKED"
+    },
+    {
+      "detail": "gates B10-B12; created once",
+      "key": "split",
+      "label": "Final split",
+      "status": "LOCKED"
+    },
+    {
+      "detail": "arms A/B x seeds 0-2",
+      "key": "training",
+      "label": "Training",
+      "status": "NOT_STARTED"
+    },
+    {
+      "detail": "internal: NOT_STARTED; external: NOT_STARTED",
+      "key": "evaluation",
+      "label": "Evaluation",
+      "status": "NOT_STARTED"
+    },
+    {
+      "detail": "Scientific results are not yet available. Experimental execution is pending.",
+      "key": "results",
+      "label": "Results",
+      "status": "NOT_AVAILABLE"
+    }
+  ],
   "package_version": "0.1.0",
   "project": {
     "central_question": "Among cases with the same missing sequence, can ensemble disagreement identify which cases are likely to fail?",
@@ -298,6 +355,11 @@
       "title": "Research software and reproducibility infrastructure (no data, no experiments)"
     },
     {
+      "date": "2026-09-29",
+      "status": "DONE",
+      "title": "B1 authorization workflow documented; TCIA inquiry prepared (not yet sent); B2-B6 tooling prepared"
+    },
+    {
       "date": null,
       "status": "PENDING",
       "title": "Gate B1: approved data route"
@@ -309,12 +371,12 @@
     },
     {
       "date": null,
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "Gates B7-B9: same-patient screen, review, patient groups"
     },
     {
       "date": null,
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "Gates B10-B12: final split, assertions, hashes"
     },
     {

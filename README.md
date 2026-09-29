@@ -23,8 +23,9 @@ The authoritative definition of everything above is the frozen protocol:
 |---|---|
 | Gate A (protocol freeze blockers A1–A9) | **Closed.** Frozen as v1.0 on 2026-09-28; A7 and A8 are owner-waived with mandatory pre-submission re-checks |
 | Research software and reproducibility infrastructure | Implemented and tested on synthetic inputs only |
-| B1: approved data route (TCIA confirmation) | **Pending** |
-| B2–B12: data, hashes, same-patient screen, groups, split | Not started |
+| B1: approved data route (TCIA confirmation) | **Pending.** Authorization record and a ready-to-send TCIA inquiry (not sent) are in [docs/data/](docs/data/B1_DATA_ROUTE_AUTHORIZATION.md) |
+| B2–B6: data acquisition, metadata hashes, manifest, counts | Not started (gated tooling prepared and tested on synthetic files) |
+| B7–B12: same-patient screen, groups, final split | **Locked** pending B2–B6 |
 | D1–D6: EXP-001 compute pilot | Not started |
 | C1–C6: pre-external-evaluation gates | Not started |
 | Training, inference, evaluation, results | Not started. **No results exist.** |
@@ -83,7 +84,7 @@ Website: see [website/README.md](website/README.md).
 
 ## Data policy
 
-This repository never contains MRI scans, NIfTI files, patient-level labels, licensed metadata files (for example `BraTS2021_MappingToTCIA.xlsx`), credentials or model checkpoints. `.gitignore` and `brats-uncertainty check-repo` (run in CI) enforce this. Datasets must be obtained from the official providers under their terms: see [docs/data/DATA_ACCESS.md](docs/data/DATA_ACCESS.md). Test fixtures are synthetic and are never described or used as BraTS data.
+This repository never contains MRI scans, NIfTI files, patient-level labels, licensed metadata files (for example `BraTS2021_MappingToTCIA.xlsx`), credentials or model checkpoints. `.gitignore` and `brats-uncertainty check-repo` (run in CI) enforce this. Datasets must be obtained from the official providers under their terms and the route approved at gate B1: see [docs/data/DATA_ACCESS.md](docs/data/DATA_ACCESS.md), [docs/data/DATA_PROVENANCE.md](docs/data/DATA_PROVENANCE.md) and [data/README.md](data/README.md). The local `data/` tree is git-ignored except its README. Test fixtures are synthetic and are never described or used as BraTS data.
 
 ## Reproducibility
 

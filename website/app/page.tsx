@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Timeline } from "@/components/Gates";
+import { StageOverview } from "@/components/Overview";
 import { Card, Notice, StatusBadge } from "@/components/ui";
 import { experiments, gateCounts, results, status } from "@/lib/data";
 
@@ -25,6 +26,15 @@ export default function HomePage() {
         <strong>No results exist.</strong> {results.statement} No study data have been acquired, no model has been
         trained and no split has been created.
       </Notice>
+
+      <section className="my-10">
+        <h2 className="mb-3 font-serif text-2xl font-semibold text-slate-900 dark:text-slate-50">Current status</h2>
+        <StageOverview />
+        <p className="mt-3 text-sm text-slate-500">
+          Data authorization: {status.data.authorization.toLowerCase()}. Data acquired:{" "}
+          {status.data.acquired ? "yes" : "no"}. {status.data.statement}
+        </p>
+      </section>
 
       <section className="my-10">
         <h2 className="mb-3 font-serif text-2xl font-semibold text-slate-900 dark:text-slate-50">Central question</h2>

@@ -31,19 +31,27 @@ def test_current_status_matches_reported_state(repo_root: Path) -> None:
     assert st.headline == "Protocol v1.0 frozen. Experimental execution pending."
     assert all(st.gate(f"A{i}").status in ("CLOSED", "OWNER_WAIVED") for i in range(1, 10))
     assert st.gate("B1").status == "PENDING"
-    for gid in [
-        *(f"B{i}" for i in range(2, 13)),
-        *(f"C{i}" for i in range(1, 7)),
-        *(f"D{i}" for i in range(1, 7)),
-    ]:
+    for gid in [*(f"B{i}" for i in range(2, 7)), *(f"C{i}" for i in range(1, 7))]:
         assert st.gate(gid).status == "NOT_STARTED", gid
+    for gid in (f"D{i}" for i in range(1, 7)):
+        assert st.gate(gid).status == "NOT_STARTED", gid
+    for gid in (f"B{i}" for i in range(7, 13)):
+        assert st.gate(gid).status == "LOCKED", gid
     assert st.results_available is False
-    assert st.raw["data"]["acquired"] is False
+    raw = st.raw
+    assert raw["data"]["acquired"] is False
+    assert raw["data"]["authorization"] == "PENDING"
+    assert raw["data"]["approved_route"] is None
+    assert raw["training"]["status"] == "NOT_STARTED"
+    assert raw["evaluation"] == {"internal": "NOT_STARTED", "external": "NOT_STARTED"}
+    assert raw["results"]["status"] == "UNAVAILABLE"
 
 
 def test_guard_passes_only_when_gates_closed(tmp_path: Path) -> None:
     root = make_status_repo(tmp_path, closed={"B1", "B2"})
-    assert check_action("build_manifest", root) == []
+    assert check_action("record_crosswalk_hash", root) == []
+    assert check_action("validate_data", root) == []
+    assert any(x.startswith("B3") for x in check_action("build_manifest", root))
     unmet = check_action("create_split", root)
     assert any(u.startswith("B3") for u in unmet)
 

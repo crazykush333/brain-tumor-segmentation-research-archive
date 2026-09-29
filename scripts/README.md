@@ -10,7 +10,11 @@ corresponding protocol gates are closed** (with evidence) in
 |---|---|---|
 | `checks/check_repository.py` | — (safe) | — |
 | `reporting/export_site_data.py` | — (safe) | — |
-| `data/build_manifest.py` | `build_manifest` | B1–B2 |
+| `data/record_acquisition.py` (B2) | `acquire_data` | B1 + recorded approved route |
+| `data/hash_metadata.py --gate B3` / `--gate B4` | `record_crosswalk_hash` / `record_ucsf_metadata_hash` | B1–B2 / B1–B3 |
+| `data/validate_data.py` | `validate_data` | B1–B2 |
+| `data/build_manifest.py` (B5) | `build_manifest` | B1–B4 |
+| `data/derive_counts.py` (B6) | `derive_counts` | B1–B5 |
 | `grouping/compute_t_screen.py` | `compute_t_screen` | B1–B6 |
 | `grouping/run_pairwise_screen.py` | `pairwise_screen` | B1–B6 (+ T_screen record) |
 | `grouping/freeze_patient_groups.py` | `freeze_patient_groups` | B1–B8 |

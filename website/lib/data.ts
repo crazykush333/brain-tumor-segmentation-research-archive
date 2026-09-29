@@ -15,7 +15,8 @@ export type GateStatus =
   | "IN_PROGRESS"
   | "PENDING"
   | "NOT_STARTED"
-  | "BLOCKED";
+  | "BLOCKED"
+  | "LOCKED";
 
 export interface Gate {
   id: string;
@@ -29,6 +30,13 @@ export interface TimelineItem {
   date: string | null;
   title: string;
   status: string;
+}
+
+export interface OverviewItem {
+  key: string;
+  label: string;
+  status: string;
+  detail: string;
 }
 
 export interface Status {
@@ -47,6 +55,14 @@ export interface Status {
   gate_groups: Record<string, string>;
   next_step: { gate: string; description: string } | null;
   timeline: TimelineItem[];
+  overview: OverviewItem[];
+  data: {
+    authorization: string;
+    approved_route: string | null;
+    acquired: boolean;
+    inquiry_sent: boolean;
+    statement: string;
+  };
   project: {
     title: string;
     short_title: string;

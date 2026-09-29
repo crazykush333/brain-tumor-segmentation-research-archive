@@ -41,6 +41,7 @@ dev = [
   "mypy>=1.10",
   "types-PyYAML",
   "build>=1.2",
+  "openpyxl>=3.1",   # tests exercise the real .xlsx crosswalk reader on synthetic workbooks
 ]
 
 [project.scripts]

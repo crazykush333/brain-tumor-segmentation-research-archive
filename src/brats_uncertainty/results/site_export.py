@@ -51,6 +51,89 @@ def _results(root: Path, status_raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_DONE = ("CLOSED", "OWNER_WAIVED")
+
+
+def _aggregate(statuses: list[str]) -> str:
+    """Summarize a run of gates as one stage status."""
+    if all(s in _DONE for s in statuses):
+        return "COMPLETED"
+    if all(s == "LOCKED" for s in statuses):
+        return "LOCKED"
+    if all(s == "NOT_STARTED" for s in statuses):
+        return "NOT_STARTED"
+    if any(s == "BLOCKED" for s in statuses):
+        return "BLOCKED"
+    if any(s in _DONE or s == "IN_PROGRESS" for s in statuses):
+        return "IN_PROGRESS"
+    return "PENDING"
+
+
+def build_overview(raw: dict[str, Any], gate_status: dict[str, str]) -> list[dict[str, str]]:
+    """High-level stage overview for the website, derived only from the status file."""
+
+    def run(prefix: str, lo: int, hi: int) -> str:
+        return _aggregate([gate_status[f"{prefix}{i}"] for i in range(lo, hi + 1)])
+
+    grouping = run("B", 7, 9)
+    ev = raw["evaluation"]
+    evaluation = (
+        "NOT_STARTED"
+        if ev["internal"] == ev["external"] == "NOT_STARTED"
+        else ("COMPLETED" if ev["internal"] == ev["external"] == "COMPLETED" else "IN_PROGRESS")
+    )
+    return [
+        {
+            "key": "protocol",
+            "label": f"Protocol {raw['protocol']['version']}",
+            "status": str(raw["protocol"]["status"]),
+            "detail": f"frozen {raw['protocol']['frozen_on']}, tag {raw['protocol']['git_tag']}",
+        },
+        {
+            "key": "b1",
+            "label": "B1 Data authorization",
+            "status": gate_status["B1"],
+            "detail": "written data-route confirmation required before any data acquisition",
+        },
+        {
+            "key": "data",
+            "label": "Data acquisition",
+            "status": run("B", 2, 6),
+            "detail": "gates B2-B6: acquisition, hashes, manifest, counts",
+        },
+        {
+            "key": "grouping",
+            "label": "Patient grouping",
+            "status": grouping,
+            "detail": "gates B7-B9: same-patient screen, manual review, patient groups",
+        },
+        {
+            "key": "split",
+            "label": "Final split",
+            "status": run("B", 10, 12),
+            "detail": "gates B10-B12; created once",
+        },
+        {
+            "key": "training",
+            "label": "Training",
+            "status": str(raw["training"]["status"]),
+            "detail": "arms A/B x seeds 0-2",
+        },
+        {
+            "key": "evaluation",
+            "label": "Evaluation",
+            "status": evaluation,
+            "detail": f"internal: {ev['internal']}; external: {ev['external']}",
+        },
+        {
+            "key": "results",
+            "label": "Results",
+            "status": "AVAILABLE" if raw["results"]["status"] == "AVAILABLE" else "NOT_AVAILABLE",
+            "detail": str(raw["results"]["statement"]),
+        },
+    ]
+
+
 def build_site_data(repo_root: str | Path) -> dict[str, Any]:
     root = Path(repo_root)
     protocol = load_protocol(root)
@@ -89,6 +172,17 @@ def build_site_data(repo_root: str | Path) -> dict[str, Any]:
             "gate_groups": raw.get("gate_groups", {}),
             "next_step": raw.get("next_step"),
             "timeline": raw.get("timeline", []),
+            "overview": build_overview(raw, {g.id: g.status for g in status.gates.values()}),
+            "data": {
+                k: raw["data"].get(k)
+                for k in (
+                    "authorization",
+                    "approved_route",
+                    "acquired",
+                    "inquiry_sent",
+                    "statement",
+                )
+            },
             "project": raw.get("project", {}),
         },
         "protocol.json": {

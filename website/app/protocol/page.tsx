@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { GateTable } from "@/components/Gates";
+import { StageOverview } from "@/components/Overview";
 import { KeyValue, Mono, PageHeader, StatusBadge } from "@/components/ui";
 import { protocol, sourceLink, status } from "@/lib/data";
 
@@ -46,6 +47,9 @@ export default function ProtocolPage() {
 
       <h2>Amendments</h2>
       <p>None.</p>
+
+      <h2>Stage overview</h2>
+      <StageOverview />
 
       <h2>Lifecycle gates</h2>
       {["A", "B", "C", "D"].map((g) => (
