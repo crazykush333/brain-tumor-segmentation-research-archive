@@ -1,16 +1,23 @@
 """Apply a gate transition to docs/project_status.yaml (owner action; dry run by default).
 
-The change is computed with ``lifecycle.apply_transition`` (transition table,
-prerequisites, automatic unlocking of newly eligible gates) and fully
-re-validated with ``status.validate_status``. That includes evidence checks:
-B2-B6 can only pass on a committed, non-synthetic record of that gate. Only the
-affected lines of the YAML are edited, so comments and layout are preserved.
-Nothing is written unless ``apply=True``.
+Steps (all fail closed):
+
+1. validate the CURRENT status file (``status.validate_status``);
+2. compute the change with ``lifecycle.apply_transition`` (transition table,
+   prerequisites, required evidence, automatic unlocking of eligible gates);
+3. re-validate the complete resulting status, including evidence content
+   (B1 decision document; committed, REAL_RESEARCH_DATA B2-B6 records linked
+   to earlier gates);
+4. without ``apply=True``: return the change list only (dry run);
+5. with ``apply=True``: edit only the affected lines (comments and layout are
+   preserved), re-parse the edited text, require it to equal the validated
+   mapping exactly (so no unrelated field can change), then write atomically.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -46,6 +53,7 @@ def plan_transition(
 ) -> tuple[dict[str, Any], list[str]]:
     """Return the validated new status mapping and a human-readable change list."""
     raw = read_yaml(repo_root / STATUS_RELPATH)
+    validate_status(raw, repo_root)  # never transition from an inconsistent state
     new = apply_transition(
         raw, gid, new_status, evidence=evidence, on=on, approved_route=approved_route
     )
@@ -107,12 +115,12 @@ def write_transition(
                     lines[i] = f"{km.group(1)}{_yaml_scalar(new['data'][k])}{km.group(3) or ''}\n"
     text = "".join(lines)
     reparsed = yaml.safe_load(text)
-    if reparsed["gates"] != new["gates"] or any(
-        reparsed["data"].get(k) != new["data"].get(k) for k in _DATA_KEYS
-    ):
+    if reparsed != new:
         raise ConfigError(
-            "status file edit did not reproduce the validated transition; not written"
+            "status file edit did not reproduce exactly the validated transition; not written"
         )
     validate_status(reparsed, repo_root)
-    path.write_text(text, encoding="utf-8", newline="\n")
+    tmp = path.with_name(path.name + ".part")
+    tmp.write_text(text, encoding="utf-8", newline="\n")
+    os.replace(tmp, path)  # atomic
     return changes

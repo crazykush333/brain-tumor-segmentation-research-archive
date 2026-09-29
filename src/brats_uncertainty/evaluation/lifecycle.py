@@ -52,13 +52,17 @@ PREREQUISITES: dict[str, tuple[str, ...]] = {
 }
 # Gates whose PASSED evidence must be a machine-readable execution record.
 RECORD_EVIDENCE_GATES = ("B2", "B3", "B4", "B5", "B6")
+# Statuses (and transitions out of BLOCKED) that must carry an evidence document.
+EVIDENCE_STATUSES = frozenset({"PASSED", "FAILED", "BLOCKED"})
 
 TRANSITIONS: dict[str, frozenset[str]] = {
     "PENDING": frozenset({"PASSED", "FAILED", "BLOCKED"}),
     "LOCKED": frozenset({"AUTHORIZED", "BLOCKED"}),
     "AUTHORIZED": frozenset({"RUNNING", "BLOCKED"}),
     "RUNNING": frozenset({"PASSED", "FAILED", "BLOCKED"}),
-    "FAILED": frozenset({"BLOCKED", "AUTHORIZED"}),
+    # FAILED never leads back to execution directly: the owner must first block the
+    # gate with a documented decision, then unblock it with a further decision.
+    "FAILED": frozenset({"BLOCKED"}),
     "BLOCKED": frozenset({"AUTHORIZED", "LOCKED", "PENDING"}),
     "PASSED": frozenset(),
 }
@@ -172,6 +176,17 @@ def apply_transition(
             raise ConfigError(f"{gid} -> PASSED requires evidence and a date")
         gates[gid]["evidence"] = evidence
         gates[gid]["closed_on"] = on
+    elif new_status in EVIDENCE_STATUSES or current == "BLOCKED":
+        if not evidence:
+            raise ConfigError(
+                f"{gid}: {current} -> {new_status} requires an evidence document "
+                "(failure record or owner decision)"
+            )
+        if on:
+            raise ConfigError("a date (closed_on) is only recorded when a gate PASSES")
+        gates[gid]["evidence"] = evidence
+    elif evidence or on:
+        raise ConfigError(f"{gid}: {current} -> {new_status} takes no evidence or date")
     if gid == "B1":
         if new_status == "PASSED":
             if not approved_route:

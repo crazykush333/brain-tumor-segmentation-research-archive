@@ -1,4 +1,4 @@
-"""Machine-readable execution records for gates B2-B6 (schema version 2).
+"""Machine-readable execution records for gates B2-B6 (schema version 3).
 
 Every record is created by code from files that actually exist on disk. No
 constructor path accepts a hash as input: hashes are always computed here from
@@ -35,9 +35,12 @@ from brats_uncertainty.utils.environment import capture_environment
 from brats_uncertainty.utils.git import git_commit, git_is_dirty
 from brats_uncertainty.utils.hashing import sha256_file, sha256_json
 from brats_uncertainty.utils.io import read_json, write_json
+from brats_uncertainty.utils.paths import is_safe_relpath
 
-RECORD_SCHEMA_VERSION = 2
+RECORD_SCHEMA_VERSION = 3
 _SHA = re.compile(r"^[0-9a-f]{64}$")
+# logical storage labels (e.g. "SYNTHETIC_TEST_DATA (temporary, outside repository)")
+_LOGICAL = re.compile(r"^[A-Za-z][A-Za-z0-9_ ()\-]*(/[A-Za-z0-9_. ()\-]+)*$")
 _ISO_DATETIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 # Exact file names fixed by the protocol (§5, gates B3/B4).
@@ -47,7 +50,20 @@ UCSF_METADATA_FILENAME = "UCSF-PDGM-metadata_v5.csv"
 # B6 verification targets: design parameters of the frozen protocol, NOT facts
 # verified from the source until a VERIFIED_FROM_SOURCE record exists.
 B6_TARGETS = {"total": 1251, "held_out_institution": 511, "development": 740}
-COUNT_STATES = ("EXPECTED_BY_PROTOCOL", "VERIFIED_FROM_SOURCE", "FAILED_VERIFICATION")
+COUNT_STATES = (
+    "EXPECTED_BY_PROTOCOL",  # targets only; no source processed
+    "VERIFIED_FROM_SOURCE",  # REAL_RESEARCH_DATA crosswalk matched all targets
+    "SYNTHETIC_TEST_ONLY",  # SYNTHETIC_TEST_DATA crosswalk matched (software test; never evidence)
+    "FAILED_VERIFICATION",  # any mismatch
+)
+# Explicit data classes, recorded in every record and manifest (not inferred from names).
+SYNTHETIC_TEST_DATA = "SYNTHETIC_TEST_DATA"
+REAL_RESEARCH_DATA = "REAL_RESEARCH_DATA"
+
+
+def data_class(synthetic: bool) -> str:
+    return SYNTHETIC_TEST_DATA if synthetic else REAL_RESEARCH_DATA
+
 
 Clock = Callable[[], datetime]
 
@@ -129,13 +145,20 @@ class InventoryEntry:
 
 
 def inventory(root: str | Path) -> tuple[InventoryEntry, ...]:
-    """SHA-256 inventory of every file below ``root`` (sorted relative paths)."""
+    """SHA-256 inventory of every file below ``root`` (sorted relative paths).
+
+    Symbolic links are refused: they could point outside the storage root.
+    """
     r = Path(root)
-    return tuple(
-        InventoryEntry(p.relative_to(r).as_posix(), sha256_file(p), p.stat().st_size)
-        for p in sorted(r.rglob("*"))
-        if p.is_file()
-    )
+    entries = []
+    for p in sorted(r.rglob("*")):
+        if p.is_symlink():
+            raise ProvenanceError(f"symbolic link in storage is not allowed: {p.relative_to(r)}")
+        if p.is_file():
+            entries.append(
+                InventoryEntry(p.relative_to(r).as_posix(), sha256_file(p), p.stat().st_size)
+            )
+    return tuple(entries)
 
 
 @dataclass(frozen=True)
@@ -226,7 +249,7 @@ class CountsRecord:
 
     gate: str
     synthetic: bool
-    status: str  # VERIFIED_FROM_SOURCE | FAILED_VERIFICATION
+    status: str  # VERIFIED_FROM_SOURCE (real) | SYNTHETIC_TEST_ONLY | FAILED_VERIFICATION
     crosswalk_sha256: str
     crosswalk_matches_b3: bool
     b3_record_fingerprint: str
@@ -252,9 +275,11 @@ class CountsRecord:
         ):
             if not _SHA.match(h):
                 raise ProvenanceError("malformed SHA-256 in counts record")
-        if self.status not in ("VERIFIED_FROM_SOURCE", "FAILED_VERIFICATION"):
+        success = "SYNTHETIC_TEST_ONLY" if self.synthetic else "VERIFIED_FROM_SOURCE"
+        if self.status not in (success, "FAILED_VERIFICATION"):
             raise ProvenanceError(
-                "counts record status must be VERIFIED_FROM_SOURCE or FAILED_VERIFICATION"
+                f"counts record status must be {success} or FAILED_VERIFICATION "
+                f"for {data_class(self.synthetic)}"
             )
         if self.targets != B6_TARGETS:
             raise ProvenanceError("B6 targets differ from the frozen protocol targets")
@@ -262,7 +287,7 @@ class CountsRecord:
         if self.checks != expected_checks:
             raise ProvenanceError("counts record checks inconsistent with counts and targets")
         ok = all(self.checks.values()) and self.crosswalk_matches_b3
-        if (self.status == "VERIFIED_FROM_SOURCE") != ok:
+        if (self.status == success) != ok:
             raise ProvenanceError("counts record status inconsistent with its checks")
         if not ok and not self.diagnostics:
             raise ProvenanceError("a failed verification must carry diagnostics")
@@ -280,7 +305,10 @@ def protocol_count_targets() -> dict[str, Any]:
 def _check_location(loc: str) -> None:
     if not loc.strip():
         raise ProvenanceError("storage location / path reference is required")
-    if Path(loc).is_absolute() or re.match(r"^[A-Za-z]:[\\/]", loc) or ".." in Path(loc).parts:
+    parts = loc.replace("\\", "/").split("/")
+    if any(p.strip() in (".", "..") for p in parts) or (
+        not is_safe_relpath(loc.replace(" ", "_")) and not _LOGICAL.match(loc)
+    ):
         raise ProvenanceError(
             "record locations must be repository-relative or logical, never absolute"
         )
@@ -316,8 +344,10 @@ def fingerprint(body: Mapping[str, Any]) -> str:
 
 
 def record_body(record: Record) -> dict[str, Any]:
+    """Validated record as a dict with its explicit data class and fingerprint (computed last)."""
     record.validate()
     body = asdict(record)
+    body["data_class"] = data_class(record.synthetic)
     body["record_fingerprint"] = fingerprint(body)
     return body
 
@@ -332,6 +362,10 @@ def read_record_body(path: str | Path) -> dict[str, Any]:
         raise ProvenanceError(f"{path}: unsupported record schema {body.get('schema_version')!r}")
     if body.get("record_fingerprint") != fingerprint(body):
         raise ProvenanceError(f"{path}: record fingerprint mismatch (record was modified)")
+    if not isinstance(body.get("synthetic"), bool) or body.get("data_class") != data_class(
+        body["synthetic"]
+    ):
+        raise ProvenanceError(f"{path}: data_class inconsistent with the synthetic flag")
     return body
 
 
@@ -349,6 +383,30 @@ def read_metadata_record(path: str | Path) -> MetadataFileRecord:
         path_reference=raw["path_reference"],
         source_url=raw["source_url"],
         doi=raw["doi"],
+        stamp=_stamp(raw["stamp"]),
+        schema_version=int(raw["schema_version"]),
+    )
+    rec.validate()
+    return rec
+
+
+def read_counts_record(path: str | Path) -> CountsRecord:
+    raw = read_record_body(path)
+    rec = CountsRecord(
+        gate=raw["gate"],
+        synthetic=bool(raw["synthetic"]),
+        status=raw["status"],
+        crosswalk_sha256=raw["crosswalk_sha256"],
+        crosswalk_matches_b3=bool(raw["crosswalk_matches_b3"]),
+        b3_record_fingerprint=raw["b3_record_fingerprint"],
+        counts=dict(raw["counts"]),
+        targets=dict(raw["targets"]),
+        checks=dict(raw["checks"]),
+        diagnostics=list(raw["diagnostics"]),
+        site_counts=dict(raw["site_counts"]),
+        hoi_site_id=raw["hoi_site_id"],
+        development_ids_sha256=raw["development_ids_sha256"],
+        hoi_ids_sha256=raw["hoi_ids_sha256"],
         stamp=_stamp(raw["stamp"]),
         schema_version=int(raw["schema_version"]),
     )
@@ -379,6 +437,8 @@ __all__ = [
     "B6_TARGETS",
     "COUNT_STATES",
     "CROSSWALK_FILENAME",
+    "REAL_RESEARCH_DATA",
+    "SYNTHETIC_TEST_DATA",
     "UCSF_METADATA_FILENAME",
     "AcquisitionRecord",
     "Clock",
@@ -388,11 +448,13 @@ __all__ = [
     "MetadataFileRecord",
     "ProvenanceStamp",
     "SourceInfo",
+    "data_class",
     "fingerprint",
     "inventory",
     "make_stamp",
     "protocol_count_targets",
     "read_acquisition_record",
+    "read_counts_record",
     "read_metadata_record",
     "read_record_body",
     "record_body",

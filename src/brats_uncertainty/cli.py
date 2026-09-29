@@ -197,6 +197,7 @@ def _cmd_build_manifest(root: Path, args: argparse.Namespace) -> int:
         Path(args.out),
         out_csv=Path(args.out_csv) if args.out_csv else None,
         metadata_files=[Path(m) for m in args.metadata_file or []],
+        metadata_records=[Path(r) for r in args.metadata_record or []],
         synthetic=args.synthetic,
     )
     print(f"B5 raw manifest: {doc['summary']} manifest_sha256={doc['manifest_sha256']}")
@@ -316,6 +317,7 @@ def build_parser() -> argparse.ArgumentParser:
     bm.add_argument("--data-root", required=True)
     bm.add_argument("--acquisition-record", required=True, help="B2 record")
     bm.add_argument("--metadata-file", action="append", help="crosswalk / UCSF file (repeatable)")
+    bm.add_argument("--metadata-record", action="append", help="B3/B4 record of each metadata file")
     bm.add_argument("--out", required=True, help="manifest JSON")
     bm.add_argument("--out-csv", default=None, help="manifest file table as CSV")
     bm.add_argument("--synthetic", action="store_true", help="SYNTHETIC_TEST_DATA inputs only")
@@ -333,7 +335,9 @@ def build_parser() -> argparse.ArgumentParser:
     gt = sub.add_parser("gate-transition", help="owner: move a B gate (dry run unless --apply)")
     gt.add_argument("gate")
     gt.add_argument("new_status")
-    gt.add_argument("--evidence", default=None, help="committed evidence path (for PASSED)")
+    gt.add_argument(
+        "--evidence", default=None, help="committed evidence (PASSED/FAILED/BLOCKED, unblocking)"
+    )
     gt.add_argument("--on", default=None, help="date YYYY-MM-DD (for PASSED)")
     gt.add_argument("--approved-route", default=None, help="B1 only: the approved data route")
     gt.add_argument("--apply", action="store_true")

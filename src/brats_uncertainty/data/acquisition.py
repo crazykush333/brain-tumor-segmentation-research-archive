@@ -54,7 +54,7 @@ from brats_uncertainty.errors import DataValidationError, ProvenanceError, Resea
 from brats_uncertainty.evaluation.guards import ACQUISITION_LOCKED_MESSAGE, require_action
 from brats_uncertainty.evaluation.status import load_status
 from brats_uncertainty.utils.logging import get_logger, log_event
-from brats_uncertainty.utils.paths import is_within
+from brats_uncertainty.utils.paths import is_safe_relpath, is_within
 
 _LOG = get_logger("acquisition")
 _CHUNK = 1 << 20
@@ -124,11 +124,17 @@ class LocalImportAdapter(AcquisitionAdapter):
         self.delivered = Path(delivered)
 
     def _files(self) -> list[Path]:
-        if not self.delivered.exists():
-            raise DataValidationError(f"delivered path not found: {self.delivered.name}")
+        if self.delivered.is_symlink() or not self.delivered.exists():
+            raise DataValidationError(f"delivered path not found or a link: {self.delivered.name}")
         if self.delivered.is_file():
             return [self.delivered]
-        return sorted(p for p in self.delivered.rglob("*") if p.is_file())
+        found = sorted(self.delivered.rglob("*"))
+        links = [p.name for p in found if p.is_symlink()]
+        if links:
+            raise DataValidationError(
+                f"symbolic links in the delivered tree are refused: {links[:3]}"
+            )
+        return [p for p in found if p.is_file()]
 
     def _rel(self, p: Path) -> str:
         return p.name if self.delivered.is_file() else p.relative_to(self.delivered).as_posix()
@@ -145,7 +151,9 @@ class LocalImportAdapter(AcquisitionAdapter):
             dest.parent.mkdir(parents=True, exist_ok=True)
             if dest.exists():
                 raise FileExistsError(f"refusing to overwrite {dest.name}")
-            shutil.copyfile(p, dest)
+            tmp = dest.with_name(dest.name + ".part")
+            shutil.copyfile(p, tmp)
+            tmp.replace(dest)  # no partially copied files under their final name
 
 
 Opener = Callable[[str], IO[bytes]]
@@ -174,8 +182,8 @@ class HttpsFileAdapter(AcquisitionAdapter):
                 raise ProvenanceError(f"{rel}: only https URLs are allowed")
             if parts.username or parts.password:
                 raise ProvenanceError(f"{rel}: URLs with embedded credentials are refused")
-            if Path(rel).is_absolute() or ".." in Path(rel).parts:
-                raise ProvenanceError(f"{rel}: destination must be a relative path")
+            if not is_safe_relpath(rel):
+                raise ProvenanceError(f"{rel}: destination must be a safe relative path")
         self.urls = dict(urls)
         self.opener = opener
 
@@ -283,7 +291,14 @@ def stage_acquire(
         if is_within(storage_root, repo_root) or is_within(out_record, repo_root):
             raise ProvenanceError("synthetic acquisition must write outside the repository")
     else:
+        if clock is not utc_now:
+            raise ProvenanceError("a custom clock is only allowed for SYNTHETIC_TEST_DATA runs")
         assert_real_acquisition_authorized(repo_root, adapter)
+        if is_within(storage_root, repo_root) and not is_within(storage_root, repo_root / "data"):
+            raise ProvenanceError(
+                "real data inside the repository may only be stored under the "
+                "git-ignored data/ tree"
+            )
         if storage_root.exists() and any(storage_root.iterdir()):
             raise FileExistsError(
                 "storage root is not empty; acquisition writes into a fresh location"

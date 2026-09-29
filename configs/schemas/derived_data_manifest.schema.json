@@ -8,6 +8,7 @@
     "manifest_type",
     "schema_version",
     "synthetic",
+    "data_class",
     "parent_manifest_sha256",
     "derivation",
     "files",
@@ -77,11 +78,18 @@
       }
     },
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "synthetic": {
       "type": "boolean",
       "description": "true only for SYNTHETIC_TEST_DATA"
+    },
+    "data_class": {
+      "enum": [
+        "SYNTHETIC_TEST_DATA",
+        "REAL_RESEARCH_DATA"
+      ],
+      "description": "explicit data class; must agree with 'synthetic'"
     }
   },
   "$defs": {

@@ -57,9 +57,30 @@ METADATA_GATES = {
 
 
 def _enter(
-    repo_root: Path, action: str, inputs: Sequence[Path], outputs: Sequence[Path], synthetic: bool
+    repo_root: Path,
+    action: str,
+    inputs: Sequence[Path],
+    outputs: Sequence[Path],
+    synthetic: bool,
+    clock: Clock = utc_now,
 ) -> None:
-    """Mode check shared by all stages (see module docstring)."""
+    """Mode check shared by all stages (see module docstring).
+
+    Fails closed. Real mode checks the research gate FIRST (an unauthorized
+    call always ends in ResearchGateError, whatever its inputs). Then:
+    missing inputs, symbolic links, a non-default clock in real mode (no
+    fabricated execution timestamps), synthetic inputs in real mode and
+    unlisted inputs in synthetic mode are all rejected.
+    """
+    if not synthetic:
+        if clock is not utc_now:
+            raise ProvenanceError("a custom clock is only allowed for SYNTHETIC_TEST_DATA runs")
+        require_action(action, repo_root)
+    for p in inputs:
+        if Path(p).is_symlink():
+            raise ProvenanceError(f"{Path(p).name}: symbolic links are not accepted as inputs")
+        if not Path(p).exists():
+            raise DataValidationError(f"input not found: {Path(p).name} (no source, no record)")
     if synthetic:
         require_synthetic([Path(p) for p in inputs], repo_root)
         for o in outputs:
@@ -71,7 +92,6 @@ def _enter(
     for p in inputs:
         if find_marker_root(p) is not None:
             raise ProvenanceError(f"{Path(p).name}: SYNTHETIC_TEST_DATA input in real mode")
-    require_action(action, repo_root)
 
 
 def _reference(path: Path, repo_root: Path, label: str | None, synthetic: bool) -> str:
@@ -103,7 +123,7 @@ def stage_hash_metadata(
     if gate not in METADATA_GATES:
         raise ValueError("gate must be B3 or B4")
     action, kind, filename = METADATA_GATES[gate]
-    _enter(repo_root, action, [path], [out], synthetic)
+    _enter(repo_root, action, [path], [out], synthetic, clock)
     if path.name != filename:
         raise DataValidationError(f"gate {gate} requires the file {filename!r}, got {path.name!r}")
     record = MetadataFileRecord(
@@ -132,6 +152,8 @@ def stage_validate_data(
 ) -> IntegrityReport:
     """Integrity audit of acquired files (real mode requires B1 PASSED and B2 runnable/passed)."""
     _enter(repo_root, "validate_data", [data_root], [], synthetic)
+    if any(p.is_symlink() for p in data_root.rglob("*")):
+        raise ProvenanceError("symbolic links are not allowed in the data tree")
     cfg = read_yaml(dataset_config)
     return validate_dataset_tree(
         data_root,
@@ -151,17 +173,46 @@ def stage_build_manifest(
     *,
     out_csv: Path | None = None,
     metadata_files: Sequence[Path] = (),
+    metadata_records: Sequence[Path] = (),
     synthetic: bool = False,
     require_clean_commit: bool = True,
     clock: Clock = utc_now,
 ) -> dict[str, Any]:
-    """Gate B5: integrity audit, then the RAW DATA MANIFEST (JSON + optional CSV)."""
+    """Gate B5: integrity audit, then the RAW DATA MANIFEST (JSON + optional CSV).
+
+    Real mode requires the crosswalk and UCSF-PDGM files together with their
+    B3 and B4 records; each file must still match its recorded SHA-256.
+    """
     outputs = [out_json, *([out_csv] if out_csv else [])]
-    _enter(repo_root, "build_manifest", [data_root, *metadata_files], outputs, synthetic)
+    _enter(
+        repo_root,
+        "build_manifest",
+        [data_root, *metadata_files],
+        outputs,
+        synthetic,
+        clock,
+    )
     acquisition = read_acquisition_record(acquisition_record)
     if acquisition.synthetic != synthetic:
         raise ProvenanceError("acquisition record synthetic flag does not match the stage mode")
+    records = [read_metadata_record(r) for r in metadata_records]
+    by_name = {r.file.file_name: r for r in records}
+    if len(by_name) != len(records):
+        raise DataValidationError("duplicate metadata records")
+    pairs = []
+    for m in metadata_files:
+        if m.name not in by_name:
+            raise DataValidationError(f"no B3/B4 record supplied for metadata file {m.name}")
+        pairs.append((m, by_name.pop(m.name)))
+    if by_name:
+        raise DataValidationError(f"metadata records without files: {sorted(by_name)}")
+    if not synthetic and sorted(r.gate for _, r in pairs) != ["B3", "B4"]:
+        raise ProvenanceError(
+            "real B5 requires the crosswalk and UCSF-PDGM files with B3 and B4 records"
+        )
     report = validate_dataset_tree(data_root, load_schema(dataset_config), deep=True)
+    if report.n_case_dirs == 0:
+        raise DataValidationError("empty data tree: no case directories to manifest")
     if not report.ok:
         raise DataValidationError(
             f"integrity audit failed with {len(report.errors)} error(s); first: {report.errors[0]}"
@@ -177,7 +228,7 @@ def stage_build_manifest(
         load_schema(dataset_config),
         acquisition,
         stamp,
-        metadata_files=list(metadata_files),
+        metadata=pairs,
         extra={
             "gate": "B5",
             "integrity": {
@@ -187,11 +238,13 @@ def stage_build_manifest(
             },
         },
     )
+    if out_csv and out_csv.exists():
+        raise FileExistsError(f"refusing to overwrite {out_csv.name}")
     write_json(out_json, doc)
     if out_csv:
-        if out_csv.exists():
-            raise FileExistsError(f"refusing to overwrite {out_csv.name}")
-        out_csv.write_text(manifest_to_csv(doc), encoding="utf-8", newline="\n")
+        tmp = out_csv.with_suffix(out_csv.suffix + ".part")
+        tmp.write_text(manifest_to_csv(doc), encoding="utf-8", newline="\n")
+        tmp.replace(out_csv)  # atomic: no partial CSV on interruption
     return doc
 
 
@@ -218,7 +271,7 @@ def stage_derive_counts(
     mismatch it is FAILED_VERIFICATION with diagnostics, and the stage then
     raises (SR3: stop, do not modify the protocol).
     """
-    _enter(repo_root, "derive_counts", [crosswalk], [out], synthetic)
+    _enter(repo_root, "derive_counts", [crosswalk], [out], synthetic, clock)
     b3 = read_metadata_record(b3_record)
     if b3.gate != "B3":
         raise ProvenanceError("b3_record is not a gate-B3 crosswalk record")
@@ -258,10 +311,11 @@ def stage_derive_counts(
             0, "crosswalk SHA-256 differs from the B3 record (file changed after B3)"
         )
     ok = hash_ok and all(checks.values())
+    success = "SYNTHETIC_TEST_ONLY" if synthetic else "VERIFIED_FROM_SOURCE"
     record = CountsRecord(
         gate="B6",
         synthetic=synthetic,
-        status="VERIFIED_FROM_SOURCE" if ok else "FAILED_VERIFICATION",
+        status=success if ok else "FAILED_VERIFICATION",
         crosswalk_sha256=actual,
         crosswalk_matches_b3=hash_ok,
         b3_record_fingerprint=b3_fp,

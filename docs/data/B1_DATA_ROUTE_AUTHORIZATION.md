@@ -44,7 +44,7 @@ These are summaries, not legal conclusions. Sources and details are in [DATA_ACC
 
 ## 4. How B1 may be closed (either path; both require a written record)
 
-1. **Provider confirmation.** TCIA replies in writing about the chosen route. Record the reply as `docs/data/B1_EVIDENCE_<YYYY-MM-DD>.md`, containing:
+1. **Provider confirmation.** TCIA replies in writing about the chosen route. Record the reply, using [B1_EVIDENCE_TEMPLATE.md](B1_EVIDENCE_TEMPLATE.md), as `docs/data/B1_EVIDENCE_<YYYY-MM-DD>.md`, containing:
    - the date received;
    - the TCIA ticket or reference number, if any;
    - the exact relevant sentences of the reply, with personal contact details redacted;
@@ -76,3 +76,4 @@ In the same commit:
 |---|---|
 | 2026-09-29 | Record created; status PENDING; inquiry prepared, not sent. |
 | 2026-09-30 | B2–B6 software completed (tested on synthetic data only); B2–B6 set to LOCKED under the gate state machine; B1 unchanged (PENDING). |
+| 2026-09-30 | Audit: B1 evidence must be `docs/data/B1_EVIDENCE_<date>.md` (template added), committed or staged, and must name the approved route. B1 remains PENDING. |

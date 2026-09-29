@@ -48,7 +48,7 @@ A public mirror is never used.
 
 **Nothing in this repository states or implies that Kaggle storage is permitted.** Documentation, URLs, public downloadability or platform access are never treated as authorization.
 
-B1 closes only through `brats-uncertainty gate-transition B1 PASSED --evidence <committed B1 evidence> --on <date> --approved-route "<route>" --apply`. That command sets `data.authorization: APPROVED` and unlocks B2 (AUTHORIZED); every other gate stays LOCKED.
+B1 closes only through `brats-uncertainty gate-transition B1 PASSED --evidence docs/data/B1_EVIDENCE_<date>.md --on <date> --approved-route "<route>" --apply`. The evidence must follow [B1_EVIDENCE_TEMPLATE.md](B1_EVIDENCE_TEMPLATE.md), be staged or committed in git, and name the same route. The B1 record, the inquiry and the template are documentation and are rejected as evidence. That command sets `data.authorization: APPROVED` and unlocks B2 (AUTHORIZED); every other gate stays LOCKED.
 
 ## 4. Runtime acquisition procedure (PLANNED WORKFLOW; locked)
 
@@ -58,8 +58,8 @@ approved source -> acquisition (B2) -> integrity verification -> manifest (B5) -
 
 `brats-uncertainty acquire` is a **dry run by default**. It only prints the plan and never touches the network or the disk. With `--execute`, a real adapter runs only if all of the following hold, and otherwise fails closed with *"Real-data acquisition is locked because B1 data-route authorization has not been recorded."*:
 
-- B1 is PASSED;
-- B2 is AUTHORIZED or RUNNING;
+- gate B1 must have status PASSED (today it is PENDING);
+- gate B2 must have status AUTHORIZED or RUNNING (today it is LOCKED);
 - `data.authorization` is `APPROVED`;
 - the adapter's `--route` equals `data.approved_route`.
 
@@ -92,7 +92,7 @@ It reports every issue in one pass.
 
 ## 6. Manifest generation (B5)
 
-`brats-uncertainty build-manifest` (gated: B1–B4 PASSED and B5 runnable) re-runs the integrity audit, refuses to continue on any error, and writes the **RAW DATA MANIFEST**: JSON following `configs/schemas/raw_data_manifest.schema.json`, with an optional CSV of the file table. For each file it records:
+`brats-uncertainty build-manifest` (gated: B1–B4 PASSED and B5 runnable) needs the crosswalk and UCSF-PDGM files **with their B3/B4 records** (`--metadata-file` and `--metadata-record`). Each file must still match its recorded SHA-256. The command re-runs the integrity audit, refuses empty trees and any error, and writes the **RAW DATA MANIFEST**: JSON following `configs/schemas/raw_data_manifest.schema.json`, with an optional CSV of the file table. For each file it records:
 
 - case ID, file type and modality;
 - file name, relative path and size;
@@ -107,7 +107,7 @@ It also records the dataset, source, DOI, version, a link to the B2 record finge
 1. It re-hashes the crosswalk and compares the hash with the B3 record.
 2. It derives the counts from the file by the site-ID rule, never from constants.
 3. It compares them with the protocol targets.
-4. It writes a record with status **VERIFIED_FROM_SOURCE** or **FAILED_VERIFICATION**, including diagnostics.
+4. It writes a record with status **VERIFIED_FROM_SOURCE** (real data only) or **FAILED_VERIFICATION**, including diagnostics. Synthetic runs can at best reach **SYNTHETIC_TEST_ONLY**, which can never close B6.
 
 On failure it stops (SR3). The protocol targets are never changed to fit the data. Before any real run, the only state is **EXPECTED_BY_PROTOCOL** (`brats-uncertainty count-targets`).
 

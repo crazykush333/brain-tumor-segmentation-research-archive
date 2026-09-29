@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Timeline } from "@/components/Gates";
 import { StageOverview } from "@/components/Overview";
 import { Card, Notice, StatusBadge } from "@/components/ui";
-import { experiments, gateCounts, results, status } from "@/lib/data";
+import { derivedFacts, experiments, gateCounts, results, status } from "@/lib/data";
 
 export default function HomePage() {
   const groups = ["A", "B", "C", "D"];
@@ -23,8 +23,8 @@ export default function HomePage() {
       </section>
 
       <Notice>
-        <strong>No results exist.</strong> {results.statement} No study data have been acquired, no model has been
-        trained and no split has been created.
+        {results.available ? null : <strong>No results exist. </strong>}
+        {results.statement} {derivedFacts().join(" ")}
       </Notice>
 
       <section className="my-10">

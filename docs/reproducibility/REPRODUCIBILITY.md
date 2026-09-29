@@ -51,6 +51,9 @@ These are software decisions, not design changes. Each is fixed in code, covered
 | 16 | B-gate lifecycle | B3 and B4 both become AUTHORIZED after B2 passes (the protocol lists them in order); PASSED still has to follow protocol order (B4 cannot pass before B3). B7 unlocks only after B6 PASSES | `evaluation/lifecycle.py` | B2 |
 | 17 | Record determinism | `record_fingerprint` = SHA-256 of canonical JSON without `stamp.created_at`, `stamp.environment` and `acquired_at` | `data/records.py` | B2 |
 | 18 | B6 inputs | counts derived from the first worksheet of the crosswalk (unless `crosswalk.sheet` is set), by the site-ID rule `Site ID == "1"`; column headers from `configs/dataset/brats2021.yaml` (re-confirmed at B3) | `data/stages.py` | B6 |
+| 19 | Gate evidence | PASSED/CLOSED/FAILED/BLOCKED evidence must be inside the repository, safe-path, not git-ignored and in the git index. B1: `B1_EVIDENCE_<date>.md` declaring the evidence type and approved route. B2–B6: a fingerprint-intact REAL_RESEARCH_DATA record from a clean existing commit and the frozen protocol hash, linked to earlier gates | `data/evidence.py` | B1 |
+| 20 | Failure handling | FAILED → BLOCKED only; BLOCKED → AUTHORIZED/LOCKED/PENDING only with an owner-decision document | `evaluation/lifecycle.py` | B2 |
+| 21 | Path safety | platform-independent relative-path rule (no leading `/` or `\`, drive letters, `:`, `..`, backslashes); symbolic links refused in data trees, deliveries and synthetic trees; real storage inside the repository only under `data/` | `utils/paths.py`, `data/*` | B2 |
 
 ## 5. Implemented vs pending software
 

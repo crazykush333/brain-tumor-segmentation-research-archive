@@ -128,3 +128,21 @@ export function gateCounts(group: string): { closed: number; total: number } {
     total: g.length,
   };
 }
+
+/** Status of an overview stage (derived by the exporter from docs/project_status.yaml). */
+export function stageStatus(key: string): string {
+  return status.overview.find((o) => o.key === key)?.status ?? "UNKNOWN";
+}
+
+/** Plain-language facts derived from the status file (never hand-typed on pages). */
+export function derivedFacts(): string[] {
+  const facts: string[] = [];
+  facts.push(status.data.acquired ? "Study data have been acquired." : "No study data have been acquired.");
+  const training = stageStatus("training");
+  facts.push(training === "NOT_STARTED" ? "No model has been trained." : `Training: ${training.toLowerCase()}.`);
+  const split = stageStatus("split");
+  facts.push(split === "COMPLETED" ? "The final split has been created." : "No final split has been created.");
+  const evaluation = stageStatus("evaluation");
+  facts.push(evaluation === "NOT_STARTED" ? "No evaluation has been run." : `Evaluation: ${evaluation.toLowerCase()}.`);
+  return facts;
+}

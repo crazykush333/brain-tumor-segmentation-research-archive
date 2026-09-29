@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Notice, PageHeader, StatusBadge } from "@/components/ui";
-import { experiments, protocol } from "@/lib/data";
+import { derivedFacts, experiments, protocol } from "@/lib/data";
 
 export const metadata: Metadata = { title: "Experiments" };
 
@@ -12,7 +12,12 @@ export default function ExperimentsPage() {
     <article className="prose-block">
       <PageHeader title="Experiments" lead="Registered experiments and their lifecycle status." />
 
-      <Notice>No experiment has been authorized or run. No training, inference or evaluation has taken place.</Notice>
+      <Notice>
+        {experiments.every((e) => e.status === "PLANNED")
+          ? "No experiment has been authorized or run."
+          : `Experiment statuses: ${experiments.map((e) => `${e.id} ${e.status.toLowerCase()}`).join(", ")}.`}{" "}
+        {derivedFacts().slice(1).join(" ")}
+      </Notice>
 
       <h2>Registered experiments</h2>
       <div className="overflow-x-auto">

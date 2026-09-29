@@ -82,10 +82,10 @@ from brats_uncertainty.results.site_export import build_overview
 from brats_uncertainty.utils.hashing import sha256_file
 from tests.conftest import (
     FAKE_ROUTE,
-    fake_record_evidence,
     make_status_repo,
     make_verbatim_status_repo,
 )
+from tests.fixtures.fake_evidence import fake_stamp, write_b1_evidence, write_record_copy
 
 FIXED = datetime(2000, 1, 1, tzinfo=UTC)
 SYN_URL = "https://synthetic.invalid/source"
@@ -343,6 +343,17 @@ def test_metadata_filenames_are_exact(
 def _manifest(repo_root: Path, tmp_path: Path) -> dict:  # type: ignore[type-arg]
     _acquire_synthetic(repo_root, tmp_path)
     root = tmp_path / "acq"
+    xw = root / "metadata" / "BraTS2021_MappingToTCIA.xlsx"
+    stage_hash_metadata(
+        repo_root,
+        "B3",
+        xw,
+        source_url=SYN_URL,
+        doi="10.0/x",
+        out=tmp_path / "B3.json",
+        synthetic=True,
+        clock=_clock,
+    )
     return stage_build_manifest(
         repo_root,
         _synthetic_config(tmp_path, repo_root),
@@ -350,7 +361,8 @@ def _manifest(repo_root: Path, tmp_path: Path) -> dict:  # type: ignore[type-arg
         tmp_path / "B2.json",
         tmp_path / "B5.json",
         out_csv=tmp_path / "B5.csv",
-        metadata_files=[root / "metadata" / "BraTS2021_MappingToTCIA.xlsx"],
+        metadata_files=[xw],
+        metadata_records=[tmp_path / "B3.json"],
         synthetic=True,
         clock=_clock,
     )
@@ -557,7 +569,7 @@ def test_b6_passes_on_synthetic_expected_dataset(repo_root: Path, tmp_path: Path
         tmp_path / "B6.json",
         synthetic=True,
     )
-    assert rec.status == "VERIFIED_FROM_SOURCE"
+    assert rec.status == "SYNTHETIC_TEST_ONLY"  # never VERIFIED_FROM_SOURCE for synthetic data
     assert rec.synthetic is True  # synthetic: can never close gate B6
     assert rec.counts == B6_TARGETS
     assert rec.checks == {"total": True, "held_out_institution": True, "development": True}
@@ -684,11 +696,12 @@ def test_invalid_transitions_rejected(repo_root: Path) -> None:
 
 def test_b1_pass_unlocks_only_b2_and_records_route(tmp_path: Path) -> None:
     root = make_verbatim_status_repo(tmp_path / "repo")
+    ev = write_b1_evidence(root)
     changes = write_transition(
         root,
         "B1",
         "PASSED",
-        evidence="evidence/gate.md",
+        evidence=ev,
         on="2000-01-01",
         approved_route=FAKE_ROUTE,
     )
@@ -700,7 +713,7 @@ def test_b1_pass_unlocks_only_b2_and_records_route(tmp_path: Path) -> None:
         root,
         "B1",
         "PASSED",
-        evidence="evidence/gate.md",
+        evidence=ev,
         on="2000-01-01",
         approved_route=FAKE_ROUTE,
         apply=True,
@@ -716,21 +729,47 @@ def test_b1_pass_unlocks_only_b2_and_records_route(tmp_path: Path) -> None:
     assert check_action("acquire_data", root) == []
 
 
-def test_gates_cannot_pass_on_synthetic_or_failed_records(tmp_path: Path) -> None:
+def test_gates_cannot_pass_on_synthetic_or_failed_records(repo_root: Path, tmp_path: Path) -> None:
     root = make_status_repo(tmp_path / "repo", closed=_b(1))
-    # B2 is AUTHORIZED; move to RUNNING, then try to pass on synthetic evidence
+    # B2 is AUTHORIZED; move to RUNNING, then try to pass on a genuine SYNTHETIC record
     raw = apply_transition(load_status(root).raw, "B2", "RUNNING")
-    syn_ev = fake_record_evidence(root, "B2", synthetic=True)
+    _acquire_synthetic(repo_root, tmp_path)
+    syn_body = read_record_body(tmp_path / "B2.json")
+    syn_ev = write_record_copy(root, "evidence/B2_synthetic.json", syn_body)
     bad = apply_transition(raw, "B2", "PASSED", evidence=syn_ev, on="2000-01-01")
     with pytest.raises(ConfigError, match="synthetic"):
         validate_status(bad, root)
     md = apply_transition(raw, "B2", "PASSED", evidence="evidence/gate.md", on="2000-01-01")
     with pytest.raises(ConfigError, match="JSON execution record"):
         validate_status(md, root)
+    forged = write_record_copy(root, "evidence/B2_forged.json", {"gate": "B2", "synthetic": False})
+    bad_forged = apply_transition(raw, "B2", "PASSED", evidence=forged, on="2000-01-01")
+    with pytest.raises(ConfigError, match="invalid"):
+        validate_status(bad_forged, root)
     root6 = make_status_repo(tmp_path / "repo6", closed=_b(5))
     raw6 = apply_transition(load_status(root6).raw, "B6", "RUNNING")
-    failed_ev = fake_record_evidence(root6, "B6", status="FAILED_VERIFICATION")
-    bad6 = apply_transition(raw6, "B6", "PASSED", evidence=failed_ev, on="2000-01-01")
+    good = read_record_body(root6 / "evidence/B6_record.json")
+    failed = CountsRecord(
+        "B6",
+        False,
+        "FAILED_VERIFICATION",
+        good["crosswalk_sha256"],
+        True,
+        good["b3_record_fingerprint"],
+        {**B6_TARGETS, "total": 1250},
+        dict(B6_TARGETS),
+        {"total": False, "held_out_institution": True, "development": True},
+        ["total: derived 1250, protocol target 1251 (difference -1)"],
+        {"1": 511, "18": 739},
+        "1",
+        good["development_ids_sha256"],
+        good["hoi_ids_sha256"],
+        fake_stamp(),
+    )
+    write_record(root6 / "evidence/B6_failed.json", failed)
+    bad6 = apply_transition(
+        raw6, "B6", "PASSED", evidence="evidence/B6_failed.json", on="2000-01-01"
+    )
     with pytest.raises(ConfigError, match="VERIFIED_FROM_SOURCE"):
         validate_status(bad6, root6)
 
@@ -738,8 +777,10 @@ def test_gates_cannot_pass_on_synthetic_or_failed_records(tmp_path: Path) -> Non
 def test_plan_transition_does_not_write(tmp_path: Path) -> None:
     root = make_verbatim_status_repo(tmp_path / "repo")
     before = (root / "docs/project_status.yaml").read_bytes()
-    _, changes = plan_transition(root, "B1", "BLOCKED")
-    assert changes == ["B1.status: PENDING -> BLOCKED"]
+    with pytest.raises(ConfigError, match="requires an evidence document"):
+        plan_transition(root, "B1", "BLOCKED")
+    _, changes = plan_transition(root, "B1", "BLOCKED", evidence="evidence/gate.md")
+    assert changes == ["B1.status: PENDING -> BLOCKED", "B1.evidence: None -> evidence/gate.md"]
     assert (root / "docs/project_status.yaml").read_bytes() == before
 
 

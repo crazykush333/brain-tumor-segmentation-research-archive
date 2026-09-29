@@ -5,7 +5,11 @@
 # `brats-uncertainty export-site-data`). Never hand-edit website data.
 #
 # Rules (enforced by src/brats_uncertainty/evaluation/status.py):
-#   - A gate may be CLOSED only with an existing evidence path and a closed_on date.
+#   - A gate may be CLOSED/PASSED only with committed evidence (inside the repository,
+#     not git-ignored, in the git index) and a closed_on date; FAILED/BLOCKED B gates
+#     need an evidence document. B1 evidence: docs/data/B1_EVIDENCE_<date>.md;
+#     B2-B6 evidence: the gate's REAL_RESEARCH_DATA execution record (clean commit,
+#     frozen protocol hash, linked to earlier gates' records).
 #   - Only gate-A items may be OWNER_WAIVED.
 #   - B gates close strictly in protocol order (B1 before B2 ...).
 #   - B gates follow the lifecycle state machine (src/brats_uncertainty/evaluation/lifecycle.py):

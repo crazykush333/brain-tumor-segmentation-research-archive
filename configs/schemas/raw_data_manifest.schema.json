@@ -8,11 +8,13 @@
     "manifest_type",
     "schema_version",
     "synthetic",
+    "data_class",
     "dataset",
     "dataset_version",
     "doi",
     "source_url",
     "acquisition",
+    "metadata_records",
     "files",
     "summary",
     "duplicates",
@@ -97,11 +99,50 @@
       }
     },
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "synthetic": {
       "type": "boolean",
       "description": "true only for SYNTHETIC_TEST_DATA"
+    },
+    "data_class": {
+      "enum": [
+        "SYNTHETIC_TEST_DATA",
+        "REAL_RESEARCH_DATA"
+      ],
+      "description": "explicit data class; must agree with 'synthetic'"
+    },
+    "metadata_records": {
+      "type": "object",
+      "description": "B3/B4 records of the metadata files included in the manifest (real B5 requires both); each file must still match its recorded SHA-256",
+      "propertyNames": {
+        "enum": [
+          "B3",
+          "B4"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "file_name",
+          "sha256",
+          "record_fingerprint"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "file_name": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "record_fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
     }
   },
   "$defs": {

@@ -38,3 +38,16 @@ def is_within(path: str | Path, parent: str | Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def is_safe_relpath(rel: str) -> bool:
+    """Platform-independent check for a safe POSIX-style relative path.
+
+    Rejects: empty paths, absolute paths on ANY platform (leading ``/`` or
+    ``\\``, drive letters, UNC), backslashes, ``:`` and ``..`` components.
+    (``pathlib`` alone is platform-dependent: ``/x`` is not absolute on Windows.)
+    """
+    if not rel or rel.startswith(("/", "\\")) or "\\" in rel or ":" in rel:
+        return False
+    parts = rel.split("/")
+    return all(p not in ("", ".", "..") for p in parts)

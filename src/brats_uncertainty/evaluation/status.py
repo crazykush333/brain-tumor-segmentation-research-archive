@@ -13,12 +13,17 @@ consistent with the gates (e.g. data cannot be "acquired" before B2 passes).
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from brats_uncertainty.data.evidence import (
+    check_b1_evidence,
+    check_evidence_committed,
+    check_evidence_path,
+    check_record_evidence,
+)
 from brats_uncertainty.errors import ConfigError
 from brats_uncertainty.evaluation.lifecycle import (
     LIFECYCLE_STATUSES,
@@ -27,6 +32,7 @@ from brats_uncertainty.evaluation.lifecycle import (
     check_invariants,
 )
 from brats_uncertainty.evaluation.lifecycle import is_closed as _is_closed
+from brats_uncertainty.utils.git import GitView
 from brats_uncertainty.utils.io import read_yaml
 from brats_uncertainty.utils.paths import find_repo_root
 
@@ -89,8 +95,16 @@ def validate_status(raw: dict[str, Any], repo_root: Path) -> dict[str, Gate]:
     ):
         if key not in raw:
             raise ConfigError(f"project_status.yaml missing key {key!r}")
+    if not isinstance(raw["gates"], list):
+        raise ConfigError("gates must be a list")
+    for key in ("data", "training", "evaluation", "results", "experiments", "protocol"):
+        if not isinstance(raw[key], dict):
+            raise ConfigError(f"{key} must be a mapping")
     gates: dict[str, Gate] = {}
+    evidence_paths: dict[str, Path] = {}
     for item in raw["gates"]:
+        if not isinstance(item, dict) or "id" not in item or "status" not in item:
+            raise ConfigError(f"malformed gate entry: {item!r}")
         gid = str(item["id"])
         if not _GATE_ID.match(gid):
             raise ConfigError(f"invalid gate id {gid!r}")
@@ -109,11 +123,12 @@ def validate_status(raw: dict[str, Any], repo_root: Path) -> dict[str, Gate]:
         if status in ("CLOSED", "OWNER_WAIVED", "PASSED"):
             if not evidence or not item.get("closed_on"):
                 raise ConfigError(f"gate {gid} is {status} without evidence and closed_on")
-            evidence_path = repo_root / str(evidence).split("#")[0]
-            if not evidence_path.exists():
-                raise ConfigError(f"gate {gid}: evidence path does not exist: {evidence}")
-            if gid in RECORD_EVIDENCE_GATES:
-                _check_record_evidence(gid, evidence_path)
+        elif item.get("closed_on"):
+            raise ConfigError(f"gate {gid} has closed_on but is not closed")
+        if status in ("FAILED", "BLOCKED") and gid.startswith("B") and not evidence:
+            raise ConfigError(f"gate {gid} is {status} without an evidence document")
+        if evidence:
+            evidence_paths[gid] = check_evidence_path(gid, str(evidence), repo_root)
         gates[gid] = Gate(
             id=gid,
             group=gid[0],
@@ -125,28 +140,24 @@ def validate_status(raw: dict[str, Any], repo_root: Path) -> dict[str, Gate]:
     # lifecycle invariants: LOCKED iff prerequisites not PASSED; PASSED in protocol order
     check_invariants({g: gate.status for g, gate in gates.items() if g.startswith("B")})
     _validate_sections(raw, gates)
+    # evidence content for passed B gates (B1 decision document; B2-B6 execution records)
+    git = GitView(repo_root)
+    check_evidence_committed({g: str(gates[g].evidence) for g in evidence_paths}, git)
+    passed = {g: evidence_paths[g] for g, gate in gates.items() if gate.status == "PASSED"}
+    if "B1" in passed:
+        check_b1_evidence(
+            str(gates["B1"].evidence), passed["B1"], raw["data"].get("approved_route")
+        )
+    protocol_sha = str(raw["protocol"].get("sha256", ""))
+    for gid in RECORD_EVIDENCE_GATES:
+        if gid in passed:
+            check_record_evidence(gid, passed[gid], git, protocol_sha, passed)
     for exp_id, exp in raw["experiments"].items():
         if exp.get("status") not in EXPERIMENT_STATUSES:
             raise ConfigError(f"experiment {exp_id}: invalid status {exp.get('status')!r}")
     if raw["results"].get("available") and not raw["results"].get("evidence"):
         raise ConfigError("results.available is true without evidence")
     return gates
-
-
-def _check_record_evidence(gid: str, path: Path) -> None:
-    """B2-B6 may only pass on a committed, non-synthetic execution record of that gate."""
-    if path.suffix != ".json":
-        raise ConfigError(f"gate {gid}: evidence must be the gate's JSON execution record")
-    try:
-        rec = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise ConfigError(f"gate {gid}: evidence record unreadable: {exc}") from exc
-    if rec.get("gate") != gid:
-        raise ConfigError(f"gate {gid}: evidence record belongs to gate {rec.get('gate')!r}")
-    if rec.get("synthetic") is not False:
-        raise ConfigError(f"gate {gid}: synthetic or unlabelled records can never close a gate")
-    if gid == "B6" and rec.get("status") != "VERIFIED_FROM_SOURCE":
-        raise ConfigError("gate B6 can only pass on a VERIFIED_FROM_SOURCE counts record")
 
 
 def _validate_sections(raw: dict[str, Any], gates: dict[str, Gate]) -> None:

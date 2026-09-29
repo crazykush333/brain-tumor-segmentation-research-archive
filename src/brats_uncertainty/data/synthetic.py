@@ -157,10 +157,18 @@ def require_synthetic(paths: list[Path], repo_root: str | Path) -> Path:
         raise ProvenanceError("invalid SYNTHETIC_TEST_DATA marker")
     listed: dict[str, str] = marker["files"]
     for p in paths:
-        p = Path(p).resolve()
-        targets = [f for f in p.rglob("*") if f.is_file()] if p.is_dir() else [p]
+        p = Path(p)
+        if p.is_symlink():
+            raise ProvenanceError("symbolic links are not SYNTHETIC_TEST_DATA files")
+        p = p.resolve()
+        targets = [f for f in p.rglob("*") if f.is_file() or f.is_symlink()] if p.is_dir() else [p]
         for f in targets:
-            rel = f.relative_to(root).as_posix()
+            if f.is_symlink():
+                raise ProvenanceError("symbolic links are not SYNTHETIC_TEST_DATA files")
+            try:
+                rel = f.relative_to(root).as_posix()
+            except ValueError as exc:
+                raise ProvenanceError("input escapes its SYNTHETIC_TEST_DATA tree") from exc
             if rel == MARKER_NAME:
                 continue
             if rel not in listed or listed[rel] != sha256_file(f):

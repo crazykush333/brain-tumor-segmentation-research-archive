@@ -26,13 +26,20 @@ from pathlib import Path
 from typing import Any
 
 from brats_uncertainty.data.manifest import FileRecord, Manifest, ManifestEntry, validate_manifest
-from brats_uncertainty.data.records import AcquisitionRecord, ProvenanceStamp, record_body
+from brats_uncertainty.data.records import (
+    AcquisitionRecord,
+    MetadataFileRecord,
+    ProvenanceStamp,
+    data_class,
+    record_body,
+)
 from brats_uncertainty.data.schema import DatasetSchema
 from brats_uncertainty.errors import DataValidationError
 from brats_uncertainty.preprocessing.modalities import MODALITIES
 from brats_uncertainty.utils.hashing import sha256_file, sha256_json
+from brats_uncertainty.utils.paths import is_safe_relpath
 
-MANIFEST_DOC_SCHEMA_VERSION = 1
+MANIFEST_DOC_SCHEMA_VERSION = 2
 FILE_TYPES = ("image", "label", "metadata", "other", "derived")
 CSV_COLUMNS = ("case_id", "file_type", "modality", "filename", "relpath", "size_bytes", "sha256")
 
@@ -40,11 +47,13 @@ RAW_REQUIRED = (
     "manifest_type",
     "schema_version",
     "synthetic",
+    "data_class",
     "dataset",
     "dataset_version",
     "doi",
     "source_url",
     "acquisition",
+    "metadata_records",
     "files",
     "summary",
     "duplicates",
@@ -55,6 +64,7 @@ DERIVED_REQUIRED = (
     "manifest_type",
     "schema_version",
     "synthetic",
+    "data_class",
     "parent_manifest_sha256",
     "derivation",
     "files",
@@ -79,6 +89,8 @@ def _classify(case_id: str, name: str, schema: DatasetSchema) -> tuple[str, str 
 def _entry(
     root: Path, p: Path, case_id: str | None, ftype: str, modality: str | None
 ) -> dict[str, Any]:
+    if p.is_symlink():
+        raise DataValidationError(f"symbolic links are not allowed in manifests: {p.name}")
     return {
         "case_id": case_id,
         "file_type": ftype,
@@ -123,12 +135,20 @@ def build_raw_manifest(
     acquisition: AcquisitionRecord,
     stamp: ProvenanceStamp,
     *,
-    metadata_files: list[Path] | None = None,
+    metadata: list[tuple[Path, MetadataFileRecord]] | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Raw manifest of ``data_root/<case_id>/...`` plus optional metadata files."""
+    """Raw manifest of ``data_root/<case_id>/...`` plus metadata files with their B3/B4 records.
+
+    Each metadata file must still hash to the value in its B3/B4 record (a file
+    changed after hashing invalidates the manifest), and each record's data
+    class must match the acquisition.
+    """
     root = Path(data_root)
     files: list[dict[str, Any]] = []
+    for p in root.rglob("*"):
+        if p.is_symlink():
+            raise DataValidationError(f"symbolic links are not allowed in the data tree: {p.name}")
     for case_dir in sorted(p for p in root.iterdir() if p.is_dir()):
         cid = case_dir.name
         if not schema.is_valid_case_id(cid):
@@ -139,14 +159,31 @@ def build_raw_manifest(
     for p in sorted(root.iterdir()):
         if p.is_file():
             files.append(_entry(root, p, None, "other", None))
-    for m in metadata_files or []:
+    metadata_records: dict[str, dict[str, str]] = {}
+    for m, rec in metadata or []:
+        if rec.synthetic != acquisition.synthetic:
+            raise DataValidationError(f"{rec.gate} record data class differs from the acquisition")
+        if m.name != rec.file.file_name:
+            raise DataValidationError(f"{m.name} does not match the {rec.gate} record file name")
         entry = _entry(m.parent, m, None, "metadata", None)
+        if entry["sha256"] != rec.file.sha256:
+            raise DataValidationError(
+                f"{m.name} changed after gate {rec.gate}: SHA-256 differs from the record"
+            )
+        if rec.gate in metadata_records:
+            raise DataValidationError(f"duplicate {rec.gate} metadata record")
         entry["relpath"] = f"metadata/{m.name}"
         files.append(entry)
+        metadata_records[rec.gate] = {
+            "file_name": rec.file.file_name,
+            "sha256": rec.file.sha256,
+            "record_fingerprint": str(record_body(rec)["record_fingerprint"]),
+        }
     doc = {
         "manifest_type": "raw",
         "schema_version": MANIFEST_DOC_SCHEMA_VERSION,
         "synthetic": acquisition.synthetic,
+        "data_class": data_class(acquisition.synthetic),
         "dataset": acquisition.source.dataset,
         "dataset_version": acquisition.source.dataset_version,
         "doi": acquisition.source.doi,
@@ -157,6 +194,7 @@ def build_raw_manifest(
             "storage_location": acquisition.storage_location,
             "route": acquisition.source.route,
         },
+        "metadata_records": dict(sorted(metadata_records.items())),
         "files": files,
         "summary": _summary(files),
         "duplicates": _duplicates(files),
@@ -187,6 +225,7 @@ def build_derived_manifest(
         "manifest_type": "derived",
         "schema_version": MANIFEST_DOC_SCHEMA_VERSION,
         "synthetic": bool(parent["synthetic"]),
+        "data_class": data_class(bool(parent["synthetic"])),
         "parent_manifest_sha256": parent["manifest_sha256"],
         "derivation": {
             "tool": tool,
@@ -214,6 +253,18 @@ def validate_manifest_doc(doc: dict[str, Any]) -> None:
         raise DataValidationError("unsupported manifest schema_version")
     if not isinstance(doc["synthetic"], bool):
         raise DataValidationError("synthetic must be a boolean")
+    if doc["data_class"] != data_class(doc["synthetic"]):
+        raise DataValidationError("data_class inconsistent with the synthetic flag")
+    if mtype == "raw" and not doc["files"]:
+        raise DataValidationError("empty raw manifest: no acquired files")
+    if mtype == "raw":
+        for gate, meta in doc["metadata_records"].items():
+            if gate not in ("B3", "B4") or set(meta) != {
+                "file_name",
+                "sha256",
+                "record_fingerprint",
+            }:
+                raise DataValidationError(f"malformed metadata_records entry {gate!r}")
     seen_paths: set[str] = set()
     seen_slots: set[tuple[str, str]] = set()
     for f in doc["files"]:
@@ -228,7 +279,7 @@ def validate_manifest_doc(doc: dict[str, Any]) -> None:
         if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
             raise DataValidationError(f"malformed sha256 for {f['relpath']}")
         rel = str(f["relpath"])
-        if Path(rel).is_absolute() or ".." in Path(rel).parts or ":" in rel:
+        if not is_safe_relpath(rel):
             raise DataValidationError(f"non-relative path {rel}")
         if rel in seen_paths:
             raise DataValidationError(f"duplicate relpath {rel}")

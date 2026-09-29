@@ -52,7 +52,7 @@ export default function ResearchPage() {
         </li>
       </ul>
 
-      <h2>Datasets (design; not yet acquired)</h2>
+      <h2>Datasets (design{status.data.acquired ? "" : "; not yet acquired"})</h2>
       <div className="overflow-x-auto">
         <table className="table-base">
           <thead>
@@ -83,7 +83,8 @@ export default function ResearchPage() {
       </div>
       <Notice>
         These are design parameters and metadata-derived counts from the frozen protocol. They are re-derived from
-        hashed files at gates B6 and C3. No imaging data have been downloaded.
+        hashed files at gates B6 and C3. Current B6 state:{" "}
+        {status.count_verification.status.replace(/_/g, " ").toLowerCase()}. {status.data.statement}
       </Notice>
 
       <h2>What this study is not</h2>

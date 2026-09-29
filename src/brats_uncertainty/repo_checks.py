@@ -106,6 +106,26 @@ FROZEN_PROTOCOL = "docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md"
 _PROTOCOL_NAME = re.compile(r"(?i)FINAL_RESEARCH_PROTOCOL")
 
 
+def sniff_imaging(path: Path) -> str | None:
+    """Detect imaging/archive content by magic bytes, regardless of the file name."""
+    try:
+        with path.open("rb") as fh:
+            head = fh.read(560)
+    except OSError:
+        return None
+    if len(head) >= 132 and head[128:132] == b"DICM":
+        return "DICOM content"
+    if len(head) >= 348 and head[344:348] in (b"n+1\x00", b"ni1\x00"):
+        return "NIfTI-1 content"
+    if len(head) >= 8 and head[4:8] in (b"n+2\x00", b"ni2\x00"):
+        return "NIfTI-2 content"
+    if head[:2] == b"\x1f\x8b":
+        return "gzip-compressed content (possible NIfTI/archive)"
+    if head[:4] == b"PK\x03\x04":
+        return "ZIP/XLSX container content"
+    return None
+
+
 @dataclass(frozen=True)
 class Finding:
     path: str
@@ -135,6 +155,9 @@ def check_paths(files: list[str], root: Path) -> list[Finding]:
             findings.append(Finding(rel, "file could be mistaken for the active protocol"))
         p = root / rel
         if p.is_file():
+            sniffed = sniff_imaging(p)
+            if sniffed:
+                findings.append(Finding(rel, f"prohibited binary: {sniffed}"))
             if p.stat().st_size > MAX_FILE_BYTES:
                 findings.append(
                     Finding(rel, f"file larger than {MAX_FILE_BYTES // (1024 * 1024)} MiB")
