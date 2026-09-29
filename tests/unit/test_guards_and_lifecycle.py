@@ -31,11 +31,11 @@ def test_current_status_matches_reported_state(repo_root: Path) -> None:
     assert st.headline == "Protocol v1.0 frozen. Experimental execution pending."
     assert all(st.gate(f"A{i}").status in ("CLOSED", "OWNER_WAIVED") for i in range(1, 10))
     assert st.gate("B1").status == "PENDING"
-    for gid in [*(f"B{i}" for i in range(2, 7)), *(f"C{i}" for i in range(1, 7))]:
+    for gid in (f"C{i}" for i in range(1, 7)):
         assert st.gate(gid).status == "NOT_STARTED", gid
     for gid in (f"D{i}" for i in range(1, 7)):
         assert st.gate(gid).status == "NOT_STARTED", gid
-    for gid in (f"B{i}" for i in range(7, 13)):
+    for gid in (f"B{i}" for i in range(2, 13)):
         assert st.gate(gid).status == "LOCKED", gid
     assert st.results_available is False
     raw = st.raw
@@ -58,14 +58,14 @@ def test_guard_passes_only_when_gates_closed(tmp_path: Path) -> None:
 
 def test_status_rejects_closure_without_evidence(tmp_path: Path, repo_root: Path) -> None:
     raw = yaml.safe_load((repo_root / "docs/project_status.yaml").read_text(encoding="utf-8"))
-    raw["gates"][9]["status"] = "CLOSED"  # B1 without evidence
+    raw["gates"][9]["status"] = "PASSED"  # B1 without evidence
     with pytest.raises(ConfigError, match="without evidence"):
         validate_status(raw, repo_root)
 
 
 def test_status_rejects_out_of_order_b_gates(tmp_path: Path) -> None:
     root = make_status_repo(tmp_path, closed={"B2"})
-    with pytest.raises(ConfigError, match="earlier gate"):
+    with pytest.raises(ConfigError, match=r"prerequisite|earlier gate"):
         load_status(root)
 
 

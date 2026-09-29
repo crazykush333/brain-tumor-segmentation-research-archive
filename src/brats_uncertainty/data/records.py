@@ -1,19 +1,29 @@
-"""Machine-readable execution records for gates B2-B6.
+"""Machine-readable execution records for gates B2-B6 (schema version 2).
 
-Every record is created by code from files that actually exist on disk. There
-is no constructor path that accepts a typed hash: hashes are always computed
-here from the bytes read. Every record carries a ``ProvenanceStamp`` with the
-exact code commit, protocol version and hash, package version and environment.
+Every record is created by code from files that actually exist on disk. No
+constructor path accepts a hash as input: hashes are always computed here from
+the bytes read. Every record carries:
 
-Records contain only identifiers, file names, sizes, hashes, counts and
-metadata. They never contain images, labels or patient-level clinical data, so
-they can be published as derived public artifacts after the gate is closed.
+- ``synthetic`` (bool, explicit): true only for SYNTHETIC_TEST_DATA runs. Such
+  records can never be gate evidence;
+- a ``ProvenanceStamp``: code commit and clean flag, package version, protocol
+  version and hash, the SHA-256 of every configuration file used, and the
+  environment;
+- a deterministic ``record_fingerprint``: the SHA-256 of the canonical JSON of
+  the record without its volatile fields (``stamp.created_at``,
+  ``stamp.environment``, ``acquired_at``). The same inputs, code and
+  configuration give the same fingerprint.
+
+Records contain only identifiers, relative paths, sizes, hashes, counts and
+aggregate metadata: never images, labels or patient-level clinical data.
 """
 
 from __future__ import annotations
 
+import copy
 import re
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -23,20 +33,27 @@ from brats_uncertainty.errors import ProvenanceError
 from brats_uncertainty.protocol import load_protocol
 from brats_uncertainty.utils.environment import capture_environment
 from brats_uncertainty.utils.git import git_commit, git_is_dirty
-from brats_uncertainty.utils.hashing import sha256_file
+from brats_uncertainty.utils.hashing import sha256_file, sha256_json
 from brats_uncertainty.utils.io import read_json, write_json
 
-RECORD_SCHEMA_VERSION = 1
+RECORD_SCHEMA_VERSION = 2
 _SHA = re.compile(r"^[0-9a-f]{64}$")
-_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_ISO_DATETIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 # Exact file names fixed by the protocol (§5, gates B3/B4).
 CROSSWALK_FILENAME = "BraTS2021_MappingToTCIA.xlsx"
 UCSF_METADATA_FILENAME = "UCSF-PDGM-metadata_v5.csv"
 
-# Protocol verification targets for B6 (design parameters; NOT verified facts
-# until computed from the hashed crosswalk).
+# B6 verification targets: design parameters of the frozen protocol, NOT facts
+# verified from the source until a VERIFIED_FROM_SOURCE record exists.
 B6_TARGETS = {"total": 1251, "held_out_institution": 511, "development": 740}
+COUNT_STATES = ("EXPECTED_BY_PROTOCOL", "VERIFIED_FROM_SOURCE", "FAILED_VERIFICATION")
+
+Clock = Callable[[], datetime]
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -47,14 +64,22 @@ class ProvenanceStamp:
     package_version: str
     protocol_version: str
     protocol_sha256: str
+    config_sha256: dict[str, str]
     environment: dict[str, Any]
 
 
-def make_stamp(repo_root: Path, *, require_clean_commit: bool = True) -> ProvenanceStamp:
-    """Stamp a record with the exact code state.
+def make_stamp(
+    repo_root: Path,
+    *,
+    require_clean_commit: bool = True,
+    config_files: Sequence[Path] = (),
+    clock: Clock = utc_now,
+    environment: Mapping[str, Any] | None = None,
+) -> ProvenanceStamp:
+    """Stamp a record with the exact code, protocol and configuration state.
 
-    By default the working tree must be a clean git checkout so that the record
-    can be reproduced from the recorded commit.
+    Real-data records require a clean, committed checkout so that the record is
+    reproducible from the recorded commit.
     """
     spec = load_protocol(repo_root)
     commit = git_commit(repo_root)
@@ -64,14 +89,23 @@ def make_stamp(repo_root: Path, *, require_clean_commit: bool = True) -> Provena
             "B2-B6 records must be produced from a clean, committed checkout "
             f"(commit={commit}, dirty={dirty}). Commit or stash changes first."
         )
+    configs: dict[str, str] = {}
+    for c in config_files:
+        p = Path(c)
+        try:
+            key = p.resolve().relative_to(Path(repo_root).resolve()).as_posix()
+        except ValueError:
+            key = p.name  # never record absolute paths
+        configs[key] = sha256_file(p)
     return ProvenanceStamp(
-        created_at=datetime.now(UTC).isoformat(),
+        created_at=clock().isoformat(),
         code_commit=commit,
         code_dirty=dirty,
         package_version=__version__,
         protocol_version=spec.version,
         protocol_sha256=str(spec.raw["protocol"]["sha256"]),
-        environment=capture_environment(),
+        config_sha256=configs,
+        environment=dict(environment) if environment is not None else capture_environment(),
     )
 
 
@@ -88,6 +122,23 @@ class HashedFile:
 
 
 @dataclass(frozen=True)
+class InventoryEntry:
+    relpath: str
+    sha256: str
+    size_bytes: int
+
+
+def inventory(root: str | Path) -> tuple[InventoryEntry, ...]:
+    """SHA-256 inventory of every file below ``root`` (sorted relative paths)."""
+    r = Path(root)
+    return tuple(
+        InventoryEntry(p.relative_to(r).as_posix(), sha256_file(p), p.stat().st_size)
+        for p in sorted(r.rglob("*"))
+        if p.is_file()
+    )
+
+
+@dataclass(frozen=True)
 class SourceInfo:
     """Where the data came from. Entered by the operator from the official page."""
 
@@ -95,7 +146,7 @@ class SourceInfo:
     dataset_version: str
     doi: str
     source_url: str
-    route: str  # must be the route approved at gate B1
+    route: str  # must be the route approved at gate B1 (real data)
 
     def validate(self) -> None:
         for k, v in asdict(self).items():
@@ -109,13 +160,16 @@ class SourceInfo:
 
 @dataclass(frozen=True)
 class AcquisitionRecord:
-    """Gate B2: official files acquired via the approved route."""
+    """Gate B2: files acquired via the approved route, with their inventory."""
 
     gate: str
+    synthetic: bool
     source: SourceInfo
-    acquisition_date: str
+    adapter: str
+    acquired_at: str
     acquired_by: str
-    files: tuple[HashedFile, ...]
+    storage_location: str  # repository-relative or logical label; never an absolute path
+    inventory: tuple[InventoryEntry, ...]
     stamp: ProvenanceStamp
     schema_version: int = RECORD_SCHEMA_VERSION
     notes: str = ""
@@ -124,13 +178,14 @@ class AcquisitionRecord:
         if self.gate != "B2":
             raise ProvenanceError("acquisition records belong to gate B2")
         self.source.validate()
-        if not _ISO_DATE.match(self.acquisition_date):
-            raise ProvenanceError("acquisition_date must be YYYY-MM-DD")
-        if not self.acquired_by.strip():
-            raise ProvenanceError("acquired_by is required")
-        if not self.files:
-            raise ProvenanceError("an acquisition record must hash at least one acquired file")
-        _check_hashes(self.files)
+        if not _ISO_DATETIME.match(self.acquired_at):
+            raise ProvenanceError("acquired_at must be an ISO-8601 timestamp")
+        if not self.acquired_by.strip() or not self.adapter.strip():
+            raise ProvenanceError("acquired_by and adapter are required")
+        _check_location(self.storage_location)
+        if not self.inventory:
+            raise ProvenanceError("an acquisition record must inventory at least one file")
+        _check_entries(self.inventory)
 
 
 @dataclass(frozen=True)
@@ -138,8 +193,10 @@ class MetadataFileRecord:
     """Gates B3/B4: exact SHA-256 of a metadata file as used."""
 
     gate: str
+    synthetic: bool
     kind: str
     file: HashedFile
+    path_reference: str
     source_url: str
     doi: str
     stamp: ProvenanceStamp
@@ -157,64 +214,188 @@ class MetadataFileRecord:
             raise ProvenanceError(f"gate {self.gate} requires file {name!r} (kind {kind!r})")
         if not self.source_url.startswith("https://"):
             raise ProvenanceError("source_url must be an https URL of the official source")
-        _check_hashes((self.file,))
+        _check_location(self.path_reference)
+        _check_entries(
+            (InventoryEntry(self.file.file_name, self.file.sha256, self.file.size_bytes),)
+        )
 
 
 @dataclass(frozen=True)
 class CountsRecord:
-    """Gate B6: counts re-derived from the hashed crosswalk."""
+    """Gate B6: counts derived from the hashed crosswalk and checked against the protocol."""
 
     gate: str
+    synthetic: bool
+    status: str  # VERIFIED_FROM_SOURCE | FAILED_VERIFICATION
     crosswalk_sha256: str
-    b3_record_sha256_matches: bool
+    crosswalk_matches_b3: bool
+    b3_record_fingerprint: str
     counts: dict[str, int]
     targets: dict[str, int]
-    matches_targets: bool
+    checks: dict[str, bool]
+    diagnostics: list[str]
+    site_counts: dict[str, int]
     hoi_site_id: str
-    stamp: ProvenanceStamp
     development_ids_sha256: str
     hoi_ids_sha256: str
+    stamp: ProvenanceStamp
     schema_version: int = RECORD_SCHEMA_VERSION
-    status: str = field(default="")
 
     def validate(self) -> None:
         if self.gate != "B6":
             raise ProvenanceError("counts records belong to gate B6")
-        for h in (self.crosswalk_sha256, self.development_ids_sha256, self.hoi_ids_sha256):
+        for h in (
+            self.crosswalk_sha256,
+            self.b3_record_fingerprint,
+            self.development_ids_sha256,
+            self.hoi_ids_sha256,
+        ):
             if not _SHA.match(h):
                 raise ProvenanceError("malformed SHA-256 in counts record")
-        if self.status not in ("PASSED", "FAILED_SR3"):
-            raise ProvenanceError("counts record status must be PASSED or FAILED_SR3")
-        if (self.status == "PASSED") != (self.matches_targets and self.b3_record_sha256_matches):
+        if self.status not in ("VERIFIED_FROM_SOURCE", "FAILED_VERIFICATION"):
+            raise ProvenanceError(
+                "counts record status must be VERIFIED_FROM_SOURCE or FAILED_VERIFICATION"
+            )
+        if self.targets != B6_TARGETS:
+            raise ProvenanceError("B6 targets differ from the frozen protocol targets")
+        expected_checks = {k: self.counts.get(k) == v for k, v in self.targets.items()}
+        if self.checks != expected_checks:
+            raise ProvenanceError("counts record checks inconsistent with counts and targets")
+        ok = all(self.checks.values()) and self.crosswalk_matches_b3
+        if (self.status == "VERIFIED_FROM_SOURCE") != ok:
             raise ProvenanceError("counts record status inconsistent with its checks")
+        if not ok and not self.diagnostics:
+            raise ProvenanceError("a failed verification must carry diagnostics")
 
 
-def _check_hashes(files: tuple[HashedFile, ...]) -> None:
-    for f in files:
-        if not _SHA.match(f.sha256):
-            raise ProvenanceError(f"malformed SHA-256 for {f.file_name}")
-        if f.size_bytes <= 0:
-            raise ProvenanceError(f"empty file recorded: {f.file_name}")
+def protocol_count_targets() -> dict[str, Any]:
+    """The B6 targets in the EXPECTED_BY_PROTOCOL state (not verified from any source)."""
+    return {
+        "status": "EXPECTED_BY_PROTOCOL",
+        "label": "Protocol verification targets (not yet verified from the source file)",
+        "targets": dict(B6_TARGETS),
+    }
+
+
+def _check_location(loc: str) -> None:
+    if not loc.strip():
+        raise ProvenanceError("storage location / path reference is required")
+    if Path(loc).is_absolute() or re.match(r"^[A-Za-z]:[\\/]", loc) or ".." in Path(loc).parts:
+        raise ProvenanceError(
+            "record locations must be repository-relative or logical, never absolute"
+        )
+
+
+def _check_entries(entries: Sequence[InventoryEntry]) -> None:
+    seen: set[str] = set()
+    for e in entries:
+        if not _SHA.match(e.sha256):
+            raise ProvenanceError(f"malformed SHA-256 for {e.relpath}")
+        if e.size_bytes <= 0:
+            raise ProvenanceError(f"empty file recorded: {e.relpath}")
+        if e.relpath in seen:
+            raise ProvenanceError(f"duplicate path in inventory: {e.relpath}")
+        seen.add(e.relpath)
 
 
 Record = AcquisitionRecord | MetadataFileRecord | CountsRecord
+_VOLATILE = (("stamp", "created_at"), ("stamp", "environment"), ("acquired_at",))
+
+
+def fingerprint(body: Mapping[str, Any]) -> str:
+    """Deterministic SHA-256 of a record body without volatile fields."""
+    b = copy.deepcopy(dict(body))
+    b.pop("record_fingerprint", None)
+    for path in _VOLATILE:
+        node: Any = b
+        for k in path[:-1]:
+            node = node.get(k, {}) if isinstance(node, dict) else {}
+        if isinstance(node, dict):
+            node.pop(path[-1], None)
+    return sha256_json(b)
+
+
+def record_body(record: Record) -> dict[str, Any]:
+    record.validate()
+    body = asdict(record)
+    body["record_fingerprint"] = fingerprint(body)
+    return body
 
 
 def write_record(path: str | Path, record: Record) -> Path:
-    record.validate()
-    return write_json(path, asdict(record))
+    return write_json(path, record_body(record))
+
+
+def read_record_body(path: str | Path) -> dict[str, Any]:
+    body: dict[str, Any] = read_json(path)
+    if body.get("schema_version") != RECORD_SCHEMA_VERSION:
+        raise ProvenanceError(f"{path}: unsupported record schema {body.get('schema_version')!r}")
+    if body.get("record_fingerprint") != fingerprint(body):
+        raise ProvenanceError(f"{path}: record fingerprint mismatch (record was modified)")
+    return body
+
+
+def _stamp(d: Mapping[str, Any]) -> ProvenanceStamp:
+    return ProvenanceStamp(**dict(d))
 
 
 def read_metadata_record(path: str | Path) -> MetadataFileRecord:
-    raw = read_json(path)
+    raw = read_record_body(path)
     rec = MetadataFileRecord(
         gate=raw["gate"],
+        synthetic=bool(raw["synthetic"]),
         kind=raw["kind"],
         file=HashedFile(**raw["file"]),
+        path_reference=raw["path_reference"],
         source_url=raw["source_url"],
         doi=raw["doi"],
-        stamp=ProvenanceStamp(**raw["stamp"]),
+        stamp=_stamp(raw["stamp"]),
         schema_version=int(raw["schema_version"]),
     )
     rec.validate()
     return rec
+
+
+def read_acquisition_record(path: str | Path) -> AcquisitionRecord:
+    raw = read_record_body(path)
+    rec = AcquisitionRecord(
+        gate=raw["gate"],
+        synthetic=bool(raw["synthetic"]),
+        source=SourceInfo(**raw["source"]),
+        adapter=raw["adapter"],
+        acquired_at=raw["acquired_at"],
+        acquired_by=raw["acquired_by"],
+        storage_location=raw["storage_location"],
+        inventory=tuple(InventoryEntry(**e) for e in raw["inventory"]),
+        stamp=_stamp(raw["stamp"]),
+        schema_version=int(raw["schema_version"]),
+        notes=raw.get("notes", ""),
+    )
+    rec.validate()
+    return rec
+
+
+__all__ = [
+    "B6_TARGETS",
+    "COUNT_STATES",
+    "CROSSWALK_FILENAME",
+    "UCSF_METADATA_FILENAME",
+    "AcquisitionRecord",
+    "Clock",
+    "CountsRecord",
+    "HashedFile",
+    "InventoryEntry",
+    "MetadataFileRecord",
+    "ProvenanceStamp",
+    "SourceInfo",
+    "fingerprint",
+    "inventory",
+    "make_stamp",
+    "protocol_count_targets",
+    "read_acquisition_record",
+    "read_metadata_record",
+    "read_record_body",
+    "record_body",
+    "utc_now",
+    "write_record",
+]

@@ -52,10 +52,13 @@ These are summaries, not legal conclusions. Sources and details are in [DATA_ACC
    - any conditions stated.
 2. **Owner-approved alternative** (protocol §5.1: "or an owner-approved alternative"). The owner signs a dated decision record naming the exact route, the rationale and the residual uncertainty, and stating that the route does not create a public or private persistent third-party copy unless TCIA has confirmed that is acceptable.
 
-Then, in the same commit:
+Then run `brats-uncertainty gate-transition B1 PASSED --evidence docs/data/B1_EVIDENCE_<date>.md --on <date> --approved-route "<route>"`. It is a dry run by default; add `--apply` to write. It validates the change and then:
 
-- set gate B1 to `CLOSED` in `docs/project_status.yaml`, with the evidence file and date;
-- set `data.authorization: APPROVED` and `data.approved_route: "<route>"` (the status validator rejects APPROVED without B1 CLOSED, and vice versa);
+- sets gate B1 to `PASSED` with the evidence file and date;
+- sets `data.authorization: APPROVED` and `data.approved_route`;
+- unlocks B2 (`AUTHORIZED`); B3–B12 stay `LOCKED`.
+
+In the same commit:
 - add an administrative entry under `docs/research/protocol-amendments/`;
 - regenerate website data: `brats-uncertainty export-site-data`.
 
@@ -65,10 +68,11 @@ Then, in the same commit:
 
 - No data acquisition (B2), hashing (B3–B4), manifest (B5) or counts (B6).
 - EXP-001 is blocked (D2 = B1).
-- The gated commands `record-acquisition`, `hash-metadata`, `validate-data`, `build-manifest` and `derive-counts` all fail with `ResearchGateError`.
+- B2–B6 are LOCKED. The real-mode commands `acquire --execute`, `hash-metadata`, `validate-data`, `build-manifest` and `derive-counts` all fail with `ResearchGateError`. `acquire` fails with: "Real-data acquisition is locked because B1 data-route authorization has not been recorded."
 
 ## 6. Change log of this record
 
 | Date | Change |
 |---|---|
 | 2026-09-29 | Record created; status PENDING; inquiry prepared, not sent. |
+| 2026-09-30 | B2–B6 software completed (tested on synthetic data only); B2–B6 set to LOCKED under the gate state machine; B1 unchanged (PENDING). |

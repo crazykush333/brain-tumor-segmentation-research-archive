@@ -15,29 +15,29 @@ GATED = [
         "configs/dataset/brats2021.yaml",
         "--data-root",
         "nonexistent",
+        "--acquisition-record",
+        "nonexistent_b2.json",
         "--out",
         "nonexistent.json",
     ],
     ["scripts/experiments/train.py", "--dataset-id", "1", "--arm", "B", "--seed", "0"],
     [
-        "scripts/data/record_acquisition.py",
-        "--dataset",
-        "d",
-        "--dataset-version",
-        "v",
-        "--doi",
-        "10.1/x",
-        "--source-url",
-        "https://example.org",
+        "scripts/data/acquire.py",
+        "--adapter",
+        "local-import",
+        "--delivered",
+        "pyproject.toml",
         "--route",
         "r",
-        "--acquisition-date",
-        "2000-01-01",
+        "--storage-root",
+        "nonexistent_store",
+        "--storage-label",
+        "x",
         "--acquired-by",
         "t",
         "--out",
         "nonexistent.json",
-        "pyproject.toml",
+        "--execute",
     ],
     [
         "scripts/data/hash_metadata.py",
@@ -80,6 +80,7 @@ def test_gated_script_refuses(repo_root: Path, argv: list[str]) -> None:
     assert proc.returncode != 0
     assert "ResearchGateError" in (proc.stderr + proc.stdout)
     assert not (repo_root / "nonexistent.json").exists()
+    assert not (repo_root / "nonexistent_store").exists()
     assert not (repo_root / "x.json").exists()
 
 

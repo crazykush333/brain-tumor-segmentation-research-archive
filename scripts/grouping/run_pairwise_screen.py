@@ -9,9 +9,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from brats_uncertainty.data.manifest import Manifest
+from brats_uncertainty.data.manifest_doc import load_case_manifest
 from brats_uncertainty.pipeline import stage_screen
-from brats_uncertainty.utils.io import read_json
 from brats_uncertainty.utils.paths import find_repo_root
 
 
@@ -28,7 +27,7 @@ def main() -> int:
     ]
     res = stage_screen(
         find_repo_root(),
-        Manifest.from_dict(read_json(a.manifest)),
+        load_case_manifest(a.manifest),
         a.data_root,
         a.t_screen,
         ids,

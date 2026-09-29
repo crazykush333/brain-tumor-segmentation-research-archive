@@ -105,6 +105,8 @@ def test_cli_verify_status_and_blocked_action(
             "x",
             "--data-root",
             "y",
+            "--acquisition-record",
+            "w",
             "--out",
             "z",
         ]

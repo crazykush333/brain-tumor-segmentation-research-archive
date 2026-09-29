@@ -8,12 +8,14 @@
 #   - A gate may be CLOSED only with an existing evidence path and a closed_on date.
 #   - Only gate-A items may be OWNER_WAIVED.
 #   - B gates close strictly in protocol order (B1 before B2 ...).
-#   - B7-B12 are LOCKED while any of B1-B6 is open.
+#   - B gates follow the lifecycle state machine (src/brats_uncertainty/evaluation/lifecycle.py):
+#     LOCKED until every prerequisite has PASSED; PASSED only with committed,
+#     non-synthetic execution-record evidence; change with `brats-uncertainty gate-transition`.
 #   - data/training/evaluation/results must agree with the gates.
 #   - results.available may be true only with evidence (results/index.json).
 
 schema_version: 1
-last_updated: "2026-09-29"
+last_updated: "2026-09-30"
 headline: "Protocol v1.0 frozen. Experimental execution pending."
 
 project:
@@ -84,11 +86,11 @@ gates:
   - {id: A9, title: "Owner approval; protocol frozen as v1.0 and tagged protocol-v1.0", status: CLOSED, evidence: docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md, closed_on: "2026-09-28"}
   # --- B: data gates (in order) -------------------------------------------------
   - {id: B1, title: "Approved data route (TCIA confirmation on private re-hosting, or owner-approved alternative)", status: PENDING, evidence: null, closed_on: null}
-  - {id: B2, title: "Official data acquired via the approved route", status: NOT_STARTED, evidence: null, closed_on: null}
-  - {id: B3, title: "SHA-256 recorded for BraTS2021_MappingToTCIA.xlsx as used", status: NOT_STARTED, evidence: null, closed_on: null}
-  - {id: B4, title: "SHA-256 recorded for UCSF-PDGM-metadata_v5.csv as used", status: NOT_STARTED, evidence: null, closed_on: null}
-  - {id: B5, title: "Data manifest and hashes recorded", status: NOT_STARTED, evidence: null, closed_on: null}
-  - {id: B6, title: "Counts re-derived from the hashed crosswalk (1,251 / 511 / 740)", status: NOT_STARTED, evidence: null, closed_on: null}
+  - {id: B2, title: "Official data acquired via the approved route", status: LOCKED, evidence: null, closed_on: null}
+  - {id: B3, title: "SHA-256 recorded for BraTS2021_MappingToTCIA.xlsx as used", status: LOCKED, evidence: null, closed_on: null}
+  - {id: B4, title: "SHA-256 recorded for UCSF-PDGM-metadata_v5.csv as used", status: LOCKED, evidence: null, closed_on: null}
+  - {id: B5, title: "Data manifest and hashes recorded", status: LOCKED, evidence: null, closed_on: null}
+  - {id: B6, title: "Counts derived from the hashed crosswalk and checked against the protocol targets", status: LOCKED, evidence: null, closed_on: null}
   - {id: B7, title: "T_screen computed from positive controls; pairwise screen run", status: LOCKED, evidence: null, closed_on: null}
   - {id: B8, title: "Flagged pairs manually reviewed", status: LOCKED, evidence: null, closed_on: null}
   - {id: B9, title: "Patient groups frozen and committed (IDs only)", status: LOCKED, evidence: null, closed_on: null}
@@ -131,7 +133,8 @@ timeline:
   - {date: "2026-09-29", title: "Research software and reproducibility infrastructure (no data, no experiments)", status: DONE}
   - {date: "2026-09-29", title: "B1 authorization workflow documented; TCIA inquiry prepared (not yet sent); B2-B6 tooling prepared", status: DONE}
   - {date: null, title: "Gate B1: approved data route", status: PENDING}
-  - {date: null, title: "Gates B2-B6: data acquisition, hashes, manifest, counts", status: NOT_STARTED}
+  - {date: "2026-09-30", title: "B2-B6 software (acquisition adapters, hashing, manifests, count verification, gate state machine) implemented; tested on SYNTHETIC_TEST_DATA only", status: DONE}
+  - {date: null, title: "Gates B2-B6: data acquisition, hashes, manifest, counts", status: LOCKED}
   - {date: null, title: "Gates B7-B9: same-patient screen, review, patient groups", status: LOCKED}
   - {date: null, title: "Gates B10-B12: final split, assertions, hashes", status: LOCKED}
   - {date: null, title: "Gates D1-D6: EXP-001 compute pilot", status: NOT_STARTED}

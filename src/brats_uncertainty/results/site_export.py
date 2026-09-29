@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from brats_uncertainty import __version__
+from brats_uncertainty.data.records import protocol_count_targets, read_record_body
 from brats_uncertainty.errors import ProvenanceError
 from brats_uncertainty.evaluation.status import load_status
 from brats_uncertainty.experiments.metadata import load_experiment
@@ -51,7 +52,7 @@ def _results(root: Path, status_raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-_DONE = ("CLOSED", "OWNER_WAIVED")
+_DONE = ("CLOSED", "OWNER_WAIVED", "PASSED")
 
 
 def _aggregate(statuses: list[str]) -> str:
@@ -62,27 +63,52 @@ def _aggregate(statuses: list[str]) -> str:
         return "LOCKED"
     if all(s == "NOT_STARTED" for s in statuses):
         return "NOT_STARTED"
-    if any(s == "BLOCKED" for s in statuses):
+    if any(s in ("BLOCKED", "FAILED") for s in statuses):
         return "BLOCKED"
-    if any(s in _DONE or s == "IN_PROGRESS" for s in statuses):
+    if any(s in _DONE or s in ("IN_PROGRESS", "RUNNING", "AUTHORIZED") for s in statuses):
         return "IN_PROGRESS"
     return "PENDING"
 
 
-def build_overview(raw: dict[str, Any], gate_status: dict[str, str]) -> list[dict[str, str]]:
+_GATE_ROWS = (
+    (
+        "b2",
+        "B2",
+        "B2 Data acquisition",
+        "official files via the B1-approved route; inventory hashed",
+    ),
+    ("b3", "B3", "B3 Crosswalk hash", "exact SHA-256 of BraTS2021_MappingToTCIA.xlsx"),
+    ("b4", "B4", "B4 UCSF-PDGM metadata hash", "exact SHA-256 of UCSF-PDGM-metadata_v5.csv"),
+    ("b5", "B5", "B5 Raw data manifest", "integrity audit + hashed manifest"),
+    (
+        "b6",
+        "B6",
+        "B6 Count verification",
+        "counts derived from the hashed crosswalk vs protocol targets",
+    ),
+    ("b7", "B7", "B7 Patient grouping", "same-patient screen; locked until B6 has passed"),
+)
+
+
+def build_overview(
+    raw: dict[str, Any], gate_status: dict[str, str], repo_root: Path | None = None
+) -> list[dict[str, str]]:
     """High-level stage overview for the website, derived only from the status file."""
 
     def run(prefix: str, lo: int, hi: int) -> str:
         return _aggregate([gate_status[f"{prefix}{i}"] for i in range(lo, hi + 1)])
 
-    grouping = run("B", 7, 9)
+    docs = [raw["data"].get("b1_record"), raw["data"].get("inquiry")]
+    docs_ready = bool(all(docs)) and (
+        repo_root is None or all((repo_root / str(d)).is_file() for d in docs)
+    )
     ev = raw["evaluation"]
     evaluation = (
         "NOT_STARTED"
         if ev["internal"] == ev["external"] == "NOT_STARTED"
         else ("COMPLETED" if ev["internal"] == ev["external"] == "COMPLETED" else "IN_PROGRESS")
     )
-    return [
+    rows = [
         {
             "key": "protocol",
             "label": f"Protocol {raw['protocol']['version']}",
@@ -90,23 +116,24 @@ def build_overview(raw: dict[str, Any], gate_status: dict[str, str]) -> list[dic
             "detail": f"frozen {raw['protocol']['frozen_on']}, tag {raw['protocol']['git_tag']}",
         },
         {
+            "key": "route_docs",
+            "label": "Data-route documentation",
+            "status": "PREPARED" if docs_ready else "NOT_STARTED",
+            "detail": "B1 record and TCIA inquiry prepared"
+            + ("" if raw["data"].get("inquiry_sent") else " (inquiry not yet sent)"),
+        },
+        {
             "key": "b1",
             "label": "B1 Data authorization",
             "status": gate_status["B1"],
             "detail": "written data-route confirmation required before any data acquisition",
         },
-        {
-            "key": "data",
-            "label": "Data acquisition",
-            "status": run("B", 2, 6),
-            "detail": "gates B2-B6: acquisition, hashes, manifest, counts",
-        },
-        {
-            "key": "grouping",
-            "label": "Patient grouping",
-            "status": grouping,
-            "detail": "gates B7-B9: same-patient screen, manual review, patient groups",
-        },
+    ]
+    rows += [
+        {"key": key, "label": label, "status": gate_status[gid], "detail": detail}
+        for key, gid, label, detail in _GATE_ROWS
+    ]
+    rows += [
         {
             "key": "split",
             "label": "Final split",
@@ -132,6 +159,23 @@ def build_overview(raw: dict[str, Any], gate_status: dict[str, str]) -> list[dic
             "detail": str(raw["results"]["statement"]),
         },
     ]
+    return rows
+
+
+def build_count_block(repo_root: Path, raw: dict[str, Any]) -> dict[str, Any]:
+    """B6 counts for display: protocol targets unless a PASSED, verified B6 record exists."""
+    block = protocol_count_targets()
+    b6 = next((g for g in raw["gates"] if g["id"] == "B6"), None)
+    if b6 and b6.get("status") == "PASSED" and b6.get("evidence"):
+        rec = read_record_body(repo_root / str(b6["evidence"]))
+        if rec.get("status") == "VERIFIED_FROM_SOURCE" and rec.get("synthetic") is False:
+            block = {
+                "status": "VERIFIED_FROM_SOURCE",
+                "label": "Counts verified from the hashed crosswalk (gate B6)",
+                "targets": rec["targets"],
+                "counts": rec["counts"],
+            }
+    return block
 
 
 def build_site_data(repo_root: str | Path) -> dict[str, Any]:
@@ -172,7 +216,8 @@ def build_site_data(repo_root: str | Path) -> dict[str, Any]:
             "gate_groups": raw.get("gate_groups", {}),
             "next_step": raw.get("next_step"),
             "timeline": raw.get("timeline", []),
-            "overview": build_overview(raw, {g.id: g.status for g in status.gates.values()}),
+            "overview": build_overview(raw, {g.id: g.status for g in status.gates.values()}, root),
+            "count_verification": build_count_block(root, raw),
             "data": {
                 k: raw["data"].get(k)
                 for k in (

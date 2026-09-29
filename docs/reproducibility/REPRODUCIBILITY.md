@@ -48,6 +48,9 @@ These are software decisions, not design changes. Each is fixed in code, covered
 | 13 | Missingness at inference | applied to the **preprocessed (normalized)** tensor, never to raw intensities (zeroing raw data would change the non-zero-mask normalization) | `inference/ensemble.py` | D1 |
 | 14 | HD95 | **not implemented**; must wrap the BraTS evaluator pinned at C6 (§4 S3) | `metrics/hd95.py` | C6 |
 | 15 | Protocol hash | SHA-256 of LF-normalized text (equal to the tagged git blob), so the check is identical on Windows (CRLF checkout) and Linux | `utils/hashing.py` | done |
+| 16 | B-gate lifecycle | B3 and B4 both become AUTHORIZED after B2 passes (the protocol lists them in order); PASSED still has to follow protocol order (B4 cannot pass before B3). B7 unlocks only after B6 PASSES | `evaluation/lifecycle.py` | B2 |
+| 17 | Record determinism | `record_fingerprint` = SHA-256 of canonical JSON without `stamp.created_at`, `stamp.environment` and `acquired_at` | `data/records.py` | B2 |
+| 18 | B6 inputs | counts derived from the first worksheet of the crosswalk (unless `crosswalk.sheet` is set), by the site-ID rule `Site ID == "1"`; column headers from `configs/dataset/brats2021.yaml` (re-confirmed at B3) | `data/stages.py` | B6 |
 
 ## 5. Implemented vs pending software
 

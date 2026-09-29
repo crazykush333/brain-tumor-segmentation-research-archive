@@ -66,6 +66,19 @@ SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             r"(?i)\b(api[_-]?key|secret[_-]?key|auth[_-]?token)\s*[:=]\s*['\"][A-Za-z0-9_\-]{20,}['\"]"
         ),
     ),
+    (
+        "Kaggle/TCIA credential assignment",
+        re.compile(
+            r"(?i)\b(kaggle_key|kaggle_username|tcia_(?:password|token|api_key)|synapse_(?:auth)?token)"
+            r"\s*[:=]\s*['\"]?[A-Za-z0-9_\-]{8,}"
+        ),
+    ),
+    (
+        "hard-coded personal path",
+        re.compile(
+            r"[A-Za-z]:[\\/]+Users[\\/]+[A-Za-z]|/Users/[A-Za-z][^/\s]*/|/home/(?!researcher/)[a-z][^/\s]*/"
+        ),
+    ),
 )
 MAX_FILE_BYTES = 5 * 1024 * 1024
 TEXT_SUFFIXES = (

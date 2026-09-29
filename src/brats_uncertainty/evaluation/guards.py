@@ -1,6 +1,9 @@
-"""Research-gate safeguards. Every guarded action fails loudly unless its gates are closed.
+"""Research-gate safeguards. Every guarded action fails loudly unless its gates allow it.
 
 Gate requirements follow the protocol lifecycle (gates B1-B12, C1-C6, D1-D6).
+An action needs (a) every prerequisite gate closed (CLOSED/PASSED) and, for the
+B-gate actions, (b) its own gate AUTHORIZED or RUNNING in the lifecycle state
+machine. Nothing is inferred from files, URLs or documentation existing.
 Test-set and external evaluations additionally require running from the exact
 commit tagged ``eval-v1`` with a clean working tree (gate C6, SR4).
 """
@@ -24,9 +27,9 @@ def _b(n: int) -> list[str]:
 _D_ALL = [f"D{i}" for i in range(1, 7)]
 
 ACTION_REQUIREMENTS: dict[str, list[str]] = {
-    "acquire_data": ["B1"],  # B2: record acquisition via the approved route
+    "acquire_data": ["B1"],  # B2: real-data acquisition via the approved route
     "record_crosswalk_hash": _b(2),  # B3
-    "record_ucsf_metadata_hash": _b(3),  # B4
+    "record_ucsf_metadata_hash": _b(2),  # B4 (available after B2, like B3)
     "build_manifest": _b(4),  # B5
     "validate_data": _b(2),  # integrity checks on acquired files (supports B5)
     "derive_counts": _b(5),  # B6
@@ -42,6 +45,25 @@ ACTION_REQUIREMENTS: dict[str, list[str]] = {
     "evaluate_upenn_hoi": [*_b(12), *_D_ALL, "C4", "C5", "C6"],
     "evaluate_brats_africa": [*_b(12), *_D_ALL, "C1", "C2", "C3", "C5", "C6"],
 }
+
+_RUNNABLE = frozenset({"AUTHORIZED", "RUNNING"})
+# action -> (own gate, statuses of that gate in which the action may run)
+OWN_GATE: dict[str, tuple[str, frozenset[str]]] = {
+    "acquire_data": ("B2", _RUNNABLE),
+    "record_crosswalk_hash": ("B3", _RUNNABLE),
+    "record_ucsf_metadata_hash": ("B4", _RUNNABLE),
+    "validate_data": ("B2", _RUNNABLE | {"PASSED"}),
+    "build_manifest": ("B5", _RUNNABLE),
+    "derive_counts": ("B6", _RUNNABLE),
+    "compute_t_screen": ("B7", _RUNNABLE),
+    "pairwise_screen": ("B7", _RUNNABLE),
+    "freeze_patient_groups": ("B9", _RUNNABLE),
+    "create_split": ("B10", _RUNNABLE),
+}
+
+ACQUISITION_LOCKED_MESSAGE = (
+    "Real-data acquisition is locked because B1 data-route authorization has not been recorded."
+)
 
 TAGGED_ACTIONS = frozenset(
     {"evaluate_internal_test", "evaluate_upenn_hoi", "evaluate_brats_africa"}
@@ -59,6 +81,13 @@ def check_action(action: str, repo_root: str | Path | None = None) -> list[str]:
         for g in ACTION_REQUIREMENTS[action]
         if not status.gate(g).is_closed
     ]
+    if action in OWN_GATE:
+        gid, allowed = OWN_GATE[action]
+        own = status.gate(gid).status
+        if own not in allowed:
+            unmet.append(f"{gid} is {own} (must be {' or '.join(sorted(allowed))})")
+    if action == "acquire_data" and status.raw["data"].get("authorization") != "APPROVED":
+        unmet.append("data.authorization is not APPROVED")
     if action in TAGGED_ACTIONS:
         tag = git_tag_commit(root, EVAL_TAG)
         if tag is None:
@@ -74,8 +103,9 @@ def require_action(action: str, repo_root: str | Path | None = None) -> None:
     """Raise ResearchGateError unless every protocol gate for ``action`` is closed."""
     unmet = check_action(action, repo_root)
     if unmet:
+        prefix = f"{ACQUISITION_LOCKED_MESSAGE} " if action == "acquire_data" else ""
         raise ResearchGateError(
-            f"action {action!r} is not authorized by the frozen protocol lifecycle. "
+            f"{prefix}action {action!r} is not authorized by the frozen protocol lifecycle. "
             f"Unmet requirements: {', '.join(unmet)}. "
             "Close the gates legitimately (with evidence in docs/project_status.yaml) first."
         )

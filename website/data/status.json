@@ -1,4 +1,13 @@
 {
+  "count_verification": {
+    "label": "Protocol verification targets (not yet verified from the source file)",
+    "status": "EXPECTED_BY_PROTOCOL",
+    "targets": {
+      "development": 740,
+      "held_out_institution": 511,
+      "total": 1251
+    }
+  },
   "data": {
     "acquired": false,
     "approved_route": null,
@@ -87,36 +96,36 @@
       "closed_on": null,
       "group": "B",
       "id": "B2",
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "Official data acquired via the approved route"
     },
     {
       "closed_on": null,
       "group": "B",
       "id": "B3",
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "SHA-256 recorded for BraTS2021_MappingToTCIA.xlsx as used"
     },
     {
       "closed_on": null,
       "group": "B",
       "id": "B4",
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "SHA-256 recorded for UCSF-PDGM-metadata_v5.csv as used"
     },
     {
       "closed_on": null,
       "group": "B",
       "id": "B5",
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "Data manifest and hashes recorded"
     },
     {
       "closed_on": null,
       "group": "B",
       "id": "B6",
-      "status": "NOT_STARTED",
-      "title": "Counts re-derived from the hashed crosswalk (1,251 / 511 / 740)"
+      "status": "LOCKED",
+      "title": "Counts derived from the hashed crosswalk and checked against the protocol targets"
     },
     {
       "closed_on": null,
@@ -246,7 +255,7 @@
     }
   ],
   "headline": "Protocol v1.0 frozen. Experimental execution pending.",
-  "last_updated": "2026-09-29",
+  "last_updated": "2026-09-30",
   "next_step": {
     "description": "Obtain and record written data-route confirmation before B2 data acquisition: send the prepared TCIA inquiry (docs/data/TCIA_DATA_ROUTE_INQUIRY.md) or record an explicit owner-approved alternative route, per protocol §5.1 and SR7. No data acquisition or compute may begin before B1 is closed.",
     "gate": "B1"
@@ -259,21 +268,51 @@
       "status": "FROZEN"
     },
     {
+      "detail": "B1 record and TCIA inquiry prepared (inquiry not yet sent)",
+      "key": "route_docs",
+      "label": "Data-route documentation",
+      "status": "PREPARED"
+    },
+    {
       "detail": "written data-route confirmation required before any data acquisition",
       "key": "b1",
       "label": "B1 Data authorization",
       "status": "PENDING"
     },
     {
-      "detail": "gates B2-B6: acquisition, hashes, manifest, counts",
-      "key": "data",
-      "label": "Data acquisition",
-      "status": "NOT_STARTED"
+      "detail": "official files via the B1-approved route; inventory hashed",
+      "key": "b2",
+      "label": "B2 Data acquisition",
+      "status": "LOCKED"
     },
     {
-      "detail": "gates B7-B9: same-patient screen, manual review, patient groups",
-      "key": "grouping",
-      "label": "Patient grouping",
+      "detail": "exact SHA-256 of BraTS2021_MappingToTCIA.xlsx",
+      "key": "b3",
+      "label": "B3 Crosswalk hash",
+      "status": "LOCKED"
+    },
+    {
+      "detail": "exact SHA-256 of UCSF-PDGM-metadata_v5.csv",
+      "key": "b4",
+      "label": "B4 UCSF-PDGM metadata hash",
+      "status": "LOCKED"
+    },
+    {
+      "detail": "integrity audit + hashed manifest",
+      "key": "b5",
+      "label": "B5 Raw data manifest",
+      "status": "LOCKED"
+    },
+    {
+      "detail": "counts derived from the hashed crosswalk vs protocol targets",
+      "key": "b6",
+      "label": "B6 Count verification",
+      "status": "LOCKED"
+    },
+    {
+      "detail": "same-patient screen; locked until B6 has passed",
+      "key": "b7",
+      "label": "B7 Patient grouping",
       "status": "LOCKED"
     },
     {
@@ -365,8 +404,13 @@
       "title": "Gate B1: approved data route"
     },
     {
+      "date": "2026-09-30",
+      "status": "DONE",
+      "title": "B2-B6 software (acquisition adapters, hashing, manifests, count verification, gate state machine) implemented; tested on SYNTHETIC_TEST_DATA only"
+    },
+    {
       "date": null,
-      "status": "NOT_STARTED",
+      "status": "LOCKED",
       "title": "Gates B2-B6: data acquisition, hashes, manifest, counts"
     },
     {

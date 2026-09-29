@@ -5,7 +5,7 @@ except this README is git-ignored. The BraTS 2021 and BraTS-Africa data must be
 obtained by each researcher from the official providers, through the data route
 approved at gate B1, under the providers' terms (see `docs/data/DATA_ACCESS.md`).
 
-**Status (2026-09-29): B1 is PENDING. No data may be placed here until B1 is closed.**
+**Status (2026-09-30): B1 is PENDING; B2-B6 are LOCKED. No data may be placed here until B1 has passed.** Synthetic test data are never generated here (the generator refuses any path inside the repository).
 
 Local layout (create with `brats-uncertainty init-data-dirs`):
 
@@ -22,7 +22,7 @@ Rules:
   archives, credentials (`kaggle.json`, `.env`, Synapse config) or checkpoints.
   `.gitignore` and `brats-uncertainty check-repo` enforce this.
 - Never type a hash, count or ID list by hand; use the gated commands
-  (`record-acquisition`, `hash-metadata`, `validate-data`, `build-manifest`,
+  (`acquire` [dry run by default], `hash-metadata`, `validate-data`, `build-manifest`,
   `derive-counts`). They fail until their gates are closed.
 - Public derived artifacts (hashes, counts, ID-only lists) are committed only
   after the owner reviews them, as administrative entries (see

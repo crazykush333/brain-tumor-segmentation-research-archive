@@ -8,10 +8,10 @@ import sys
 from pathlib import Path
 
 from brats_uncertainty.data.crosswalk import parse_rows, read_xlsx_records
-from brats_uncertainty.data.manifest import Manifest
+from brats_uncertainty.data.manifest_doc import load_case_manifest
 from brats_uncertainty.grouping.groups import PatientGrouping
 from brats_uncertainty.pipeline import stage_create_split
-from brats_uncertainty.utils.io import read_json, read_yaml
+from brats_uncertainty.utils.io import read_yaml
 from brats_uncertainty.utils.paths import find_repo_root
 
 
@@ -41,7 +41,7 @@ def main() -> int:
     root = find_repo_root()
     cfg = read_yaml(a.dataset_config)["crosswalk"]
     rows = parse_rows(read_xlsx_records(a.crosswalk), cfg["columns"])
-    manifest = Manifest.from_dict(read_json(a.manifest))
+    manifest = load_case_manifest(a.manifest)
     labels = {e.case_id: a.data_root / e.label.relpath for e in manifest.entries if e.label}
     res = stage_create_split(root, rows, _grouping(a.groups), labels, a.out_dir)
     print(res.summary())

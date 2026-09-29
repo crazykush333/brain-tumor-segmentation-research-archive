@@ -16,7 +16,11 @@ export type GateStatus =
   | "PENDING"
   | "NOT_STARTED"
   | "BLOCKED"
-  | "LOCKED";
+  | "LOCKED"
+  | "AUTHORIZED"
+  | "RUNNING"
+  | "PASSED"
+  | "FAILED";
 
 export interface Gate {
   id: string;
@@ -56,6 +60,12 @@ export interface Status {
   next_step: { gate: string; description: string } | null;
   timeline: TimelineItem[];
   overview: OverviewItem[];
+  count_verification: {
+    status: string;
+    label: string;
+    targets: Record<string, number>;
+    counts?: Record<string, number>;
+  };
   data: {
     authorization: string;
     approved_route: string | null;

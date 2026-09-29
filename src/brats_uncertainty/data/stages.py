@@ -1,50 +1,54 @@
-"""Gated execution stages for the data gates B2-B6.
+"""Gated execution stages for the data gates B3-B6 (B2 lives in ``data.acquisition``).
 
-Each stage:
-1. calls ``require_action`` (fails with ResearchGateError until the preceding
-   gates are CLOSED, with evidence, in docs/project_status.yaml);
-2. reads or hashes only files that actually exist;
-3. writes one provenance-stamped record and never overwrites an existing one.
+Every stage runs in exactly one explicit mode:
 
-Nothing here downloads data. Acquisition itself (B2) happens through the route
-approved at B1 and is performed by the operator; ``stage_record_acquisition``
-then hashes the acquired files and records where they came from.
+- **real** (default): calls ``require_action`` for its gate, which needs the
+  prerequisite gates PASSED and the stage's own gate AUTHORIZED/RUNNING in
+  docs/project_status.yaml. It refuses inputs from a SYNTHETIC_TEST_DATA tree.
+- **synthetic** (``synthetic=True``): no gate check, but every input must be a
+  generator-listed, unmodified file of a SYNTHETIC_TEST_DATA tree outside the
+  repository. Outputs must be written outside the repository, and records
+  carry ``synthetic: true``, so they can never close a gate.
 
-Closing a gate remains a separate, deliberate step: the owner reviews the
-record, commits it (IDs/hashes/counts only) and sets the gate to CLOSED with
-the record as evidence.
+Stages write one provenance-stamped record and never overwrite an existing
+one. Software never advances a gate: after reviewing a record, the owner moves
+the gate with ``brats-uncertainty gate-transition`` and commits the
+(non-synthetic) record as evidence.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Sequence
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from brats_uncertainty.data.crosswalk import derive_cohorts, parse_rows, read_table_records
+from brats_uncertainty.data.crosswalk import parse_rows, read_table_records
 from brats_uncertainty.data.integrity import IntegrityReport, validate_dataset_tree
-from brats_uncertainty.data.manifest import MANIFEST_SCHEMA_VERSION, Manifest, build_manifest
+from brats_uncertainty.data.manifest_doc import build_raw_manifest, manifest_to_csv
 from brats_uncertainty.data.records import (
     B6_TARGETS,
     CROSSWALK_FILENAME,
     UCSF_METADATA_FILENAME,
-    AcquisitionRecord,
+    Clock,
     CountsRecord,
     HashedFile,
     MetadataFileRecord,
-    SourceInfo,
     make_stamp,
+    read_acquisition_record,
     read_metadata_record,
+    record_body,
+    utc_now,
     write_record,
 )
 from brats_uncertainty.data.schema import load_schema
-from brats_uncertainty.errors import DataValidationError, ProvenanceError, ResearchGateError
+from brats_uncertainty.data.synthetic import find_marker_root, require_synthetic
+from brats_uncertainty.errors import DataValidationError, ProvenanceError
 from brats_uncertainty.evaluation.guards import require_action
-from brats_uncertainty.evaluation.status import load_status
 from brats_uncertainty.protocol import load_protocol
 from brats_uncertainty.utils.hashing import sha256_bytes, sha256_file
 from brats_uncertainty.utils.io import read_yaml, write_json
+from brats_uncertainty.utils.paths import is_within
 
 METADATA_GATES = {
     "B3": ("record_crosswalk_hash", "crosswalk", CROSSWALK_FILENAME),
@@ -52,44 +56,34 @@ METADATA_GATES = {
 }
 
 
-def _approved_route(repo_root: Path) -> str:
-    data = load_status(repo_root).raw["data"]
-    route = data.get("approved_route")
-    if data.get("authorization") != "APPROVED" or not route:
-        raise ResearchGateError("no approved data route is recorded (gate B1)")
-    return str(route)
+def _enter(
+    repo_root: Path, action: str, inputs: Sequence[Path], outputs: Sequence[Path], synthetic: bool
+) -> None:
+    """Mode check shared by all stages (see module docstring)."""
+    if synthetic:
+        require_synthetic([Path(p) for p in inputs], repo_root)
+        for o in outputs:
+            if is_within(o, repo_root):
+                raise ProvenanceError(
+                    "synthetic-mode outputs must be written outside the repository"
+                )
+        return
+    for p in inputs:
+        if find_marker_root(p) is not None:
+            raise ProvenanceError(f"{Path(p).name}: SYNTHETIC_TEST_DATA input in real mode")
+    require_action(action, repo_root)
 
 
-def stage_record_acquisition(
-    repo_root: Path,
-    source: SourceInfo,
-    files: Sequence[Path],
-    *,
-    acquisition_date: str,
-    acquired_by: str,
-    out: Path,
-    notes: str = "",
-    require_clean_commit: bool = True,
-) -> AcquisitionRecord:
-    """Gate B2: hash the files obtained through the approved route and record their source."""
-    require_action("acquire_data", repo_root)
-    approved = _approved_route(repo_root)
-    if source.route != approved:
-        raise ProvenanceError(f"route {source.route!r} is not the B1-approved route {approved!r}")
-    missing = [str(f) for f in files if not Path(f).is_file()]
-    if missing:
-        raise DataValidationError(f"acquired files not found: {missing}")
-    record = AcquisitionRecord(
-        gate="B2",
-        source=source,
-        acquisition_date=acquisition_date,
-        acquired_by=acquired_by,
-        files=tuple(HashedFile.from_path(f) for f in files),
-        stamp=make_stamp(repo_root, require_clean_commit=require_clean_commit),
-        notes=notes,
+def _reference(path: Path, repo_root: Path, label: str | None, synthetic: bool) -> str:
+    if label:
+        return label
+    if synthetic:
+        return f"SYNTHETIC_TEST_DATA/{path.name}"
+    if is_within(path, repo_root):
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    raise ProvenanceError(
+        "inputs outside the repository need a logical path reference (never absolute)"
     )
-    write_record(out, record)
-    return record
 
 
 def stage_hash_metadata(
@@ -100,22 +94,29 @@ def stage_hash_metadata(
     source_url: str,
     doi: str,
     out: Path,
+    path_reference: str | None = None,
+    synthetic: bool = False,
     require_clean_commit: bool = True,
+    clock: Clock = utc_now,
 ) -> MetadataFileRecord:
-    """Gates B3/B4: exact SHA-256 of the crosswalk or the UCSF-PDGM metadata file as used."""
+    """Gates B3/B4: exact SHA-256 (and size) of the crosswalk or the UCSF-PDGM metadata file."""
     if gate not in METADATA_GATES:
         raise ValueError("gate must be B3 or B4")
     action, kind, filename = METADATA_GATES[gate]
-    require_action(action, repo_root)
+    _enter(repo_root, action, [path], [out], synthetic)
     if path.name != filename:
         raise DataValidationError(f"gate {gate} requires the file {filename!r}, got {path.name!r}")
     record = MetadataFileRecord(
         gate=gate,
+        synthetic=synthetic,
         kind=kind,
         file=HashedFile.from_path(path),
+        path_reference=_reference(path, repo_root, path_reference, synthetic),
         source_url=source_url,
         doi=doi,
-        stamp=make_stamp(repo_root, require_clean_commit=require_clean_commit),
+        stamp=make_stamp(
+            repo_root, require_clean_commit=require_clean_commit and not synthetic, clock=clock
+        ),
     )
     write_record(out, record)
     return record
@@ -127,19 +128,17 @@ def stage_validate_data(
     data_root: Path,
     *,
     deep: bool = True,
-    manifest: Manifest | None = None,
+    synthetic: bool = False,
 ) -> IntegrityReport:
-    """Integrity audit of acquired files (gated: requires B1-B2)."""
-    require_action("validate_data", repo_root)
+    """Integrity audit of acquired files (real mode requires B1 PASSED and B2 runnable/passed)."""
+    _enter(repo_root, "validate_data", [data_root], [], synthetic)
     cfg = read_yaml(dataset_config)
-    shape = cfg.get("layout", {}).get("expected_shape")
     return validate_dataset_tree(
         data_root,
         load_schema(dataset_config),
         require_labels=True,
         deep=deep,
-        expected_shape=shape,
-        manifest=manifest,
+        expected_shape=cfg.get("layout", {}).get("expected_shape"),
     )
 
 
@@ -147,32 +146,53 @@ def stage_build_manifest(
     repo_root: Path,
     dataset_config: Path,
     data_root: Path,
-    out: Path,
+    acquisition_record: Path,
+    out_json: Path,
     *,
+    out_csv: Path | None = None,
+    metadata_files: Sequence[Path] = (),
+    synthetic: bool = False,
     require_clean_commit: bool = True,
-) -> Manifest:
-    """Gate B5: integrity audit, then a hashed manifest (IDs, relative paths, sizes, SHA-256)."""
-    require_action("build_manifest", repo_root)
+    clock: Clock = utc_now,
+) -> dict[str, Any]:
+    """Gate B5: integrity audit, then the RAW DATA MANIFEST (JSON + optional CSV)."""
+    outputs = [out_json, *([out_csv] if out_csv else [])]
+    _enter(repo_root, "build_manifest", [data_root, *metadata_files], outputs, synthetic)
+    acquisition = read_acquisition_record(acquisition_record)
+    if acquisition.synthetic != synthetic:
+        raise ProvenanceError("acquisition record synthetic flag does not match the stage mode")
     report = validate_dataset_tree(data_root, load_schema(dataset_config), deep=True)
     if not report.ok:
         raise DataValidationError(
             f"integrity audit failed with {len(report.errors)} error(s); first: {report.errors[0]}"
         )
-    manifest = build_manifest(data_root, load_schema(dataset_config))
-    stamp = make_stamp(repo_root, require_clean_commit=require_clean_commit)
-    write_json(
-        out,
-        {
+    stamp = make_stamp(
+        repo_root,
+        require_clean_commit=require_clean_commit and not synthetic,
+        config_files=[dataset_config],
+        clock=clock,
+    )
+    doc = build_raw_manifest(
+        data_root,
+        load_schema(dataset_config),
+        acquisition,
+        stamp,
+        metadata_files=list(metadata_files),
+        extra={
             "gate": "B5",
-            "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
-            "manifest_sha256": manifest.sha256,
-            "n_cases": len(manifest.entries),
-            "integrity": report.to_dict(),
-            "stamp": asdict(stamp),
-            "manifest": manifest.to_dict(),
+            "integrity": {
+                "n_errors": 0,
+                "n_warnings": len(report.issues),
+                "n_cases": report.n_case_dirs,
+            },
         },
     )
-    return manifest
+    write_json(out_json, doc)
+    if out_csv:
+        if out_csv.exists():
+            raise FileExistsError(f"refusing to overwrite {out_csv.name}")
+        out_csv.write_text(manifest_to_csv(doc), encoding="utf-8", newline="\n")
+    return doc
 
 
 def _ids_sha256(ids: Sequence[str]) -> str:
@@ -186,25 +206,31 @@ def stage_derive_counts(
     dataset_config: Path,
     out: Path,
     *,
+    synthetic: bool = False,
     require_clean_commit: bool = True,
+    clock: Clock = utc_now,
 ) -> CountsRecord:
-    """Gate B6: re-derive 1,251 / 511 / 740 from the hashed crosswalk.
+    """Gate B6: derive 1,251 / 511 / 740 from the hashed crosswalk (fail closed).
 
-    The crosswalk is re-hashed and must equal the B3 record. The record is
-    written whether or not the targets match (a mismatch is logged as
-    FAILED_SR3 and then raised); success is never assumed.
+    Counts are always computed from the file. The protocol targets are only
+    compared against, never substituted. The crosswalk is re-hashed and must
+    equal the B3 record. The record is written in both outcomes: on any
+    mismatch it is FAILED_VERIFICATION with diagnostics, and the stage then
+    raises (SR3: stop, do not modify the protocol).
     """
-    require_action("derive_counts", repo_root)
+    _enter(repo_root, "derive_counts", [crosswalk], [out], synthetic)
     b3 = read_metadata_record(b3_record)
     if b3.gate != "B3":
         raise ProvenanceError("b3_record is not a gate-B3 crosswalk record")
+    if b3.synthetic != synthetic:
+        raise ProvenanceError("B3 record synthetic flag does not match the stage mode")
     if crosswalk.name != CROSSWALK_FILENAME:
         raise DataValidationError(f"expected {CROSSWALK_FILENAME!r}, got {crosswalk.name!r}")
+    b3_fp = str(record_body(b3)["record_fingerprint"])
     actual = sha256_file(crosswalk)
     hash_ok = actual == b3.file.sha256
     cfg: dict[str, Any] = read_yaml(dataset_config)
-    spec = load_protocol(repo_root)
-    cohorts_cfg = spec.raw["cohorts"]
+    cohorts_cfg = load_protocol(repo_root).raw["cohorts"]
     hoi_site = str(cohorts_cfg["hoi_site_id"])
     targets = {
         "total": int(cohorts_cfg["brats2021_training_total"]),
@@ -221,30 +247,47 @@ def stage_derive_counts(
     hoi = [r.case_id for r in rows if r.site_id == hoi_site]
     dev = [r.case_id for r in rows if r.site_id != hoi_site]
     counts = {"total": len(rows), "held_out_institution": len(hoi), "development": len(dev)}
-    matches = counts == targets
+    checks = {k: counts[k] == v for k, v in targets.items()}
+    diagnostics = [
+        f"{k}: derived {counts[k]}, protocol target {v} (difference {counts[k] - v:+d})"
+        for k, v in targets.items()
+        if counts[k] != v
+    ]
+    if not hash_ok:
+        diagnostics.insert(
+            0, "crosswalk SHA-256 differs from the B3 record (file changed after B3)"
+        )
+    ok = hash_ok and all(checks.values())
     record = CountsRecord(
         gate="B6",
+        synthetic=synthetic,
+        status="VERIFIED_FROM_SOURCE" if ok else "FAILED_VERIFICATION",
         crosswalk_sha256=actual,
-        b3_record_sha256_matches=hash_ok,
+        crosswalk_matches_b3=hash_ok,
+        b3_record_fingerprint=b3_fp,
         counts=counts,
         targets=targets,
-        matches_targets=matches,
+        checks=checks,
+        diagnostics=diagnostics,
+        site_counts=dict(sorted(Counter(r.site_id for r in rows).items())),
         hoi_site_id=hoi_site,
-        stamp=make_stamp(repo_root, require_clean_commit=require_clean_commit),
         development_ids_sha256=_ids_sha256(dev),
         hoi_ids_sha256=_ids_sha256(hoi),
-        status="PASSED" if (matches and hash_ok) else "FAILED_SR3",
+        stamp=make_stamp(
+            repo_root,
+            require_clean_commit=require_clean_commit and not synthetic,
+            config_files=[dataset_config],
+            clock=clock,
+        ),
     )
     write_record(out, record)
     if not hash_ok:
-        raise ProvenanceError("crosswalk SHA-256 differs from the B3 record; stop (SR3)")
-    if not matches:
-        # derive_cohorts raises the protocol's SR3 error with the exact differences
-        derive_cohorts(
-            rows,
-            hoi_site_id=hoi_site,
-            expected_total=targets["total"],
-            expected_hoi=targets["held_out_institution"],
-            expected_development=targets["development"],
+        raise ProvenanceError(
+            "B6 FAILED_VERIFICATION: crosswalk SHA-256 differs from the B3 record"
+        )
+    if not ok:
+        raise DataValidationError(
+            "B6 FAILED_VERIFICATION (SR3: stop; the protocol is not modified): "
+            + "; ".join(diagnostics)
         )
     return record

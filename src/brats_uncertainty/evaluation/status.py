@@ -1,36 +1,39 @@
 """Load and validate ``docs/project_status.yaml`` (single source of project state).
 
 The website, the README status line and the research-gate guards all read this
-file. A gate may only be recorded as CLOSED with an evidence path that exists
-in the repository and a closure date; B-gates must close in protocol order.
-Gates B7-B12 are LOCKED while any of the data gates B1-B6 is still open. The
+file. B gates follow the lifecycle state machine in
+``brats_uncertainty.evaluation.lifecycle`` (LOCKED / PENDING / AUTHORIZED /
+RUNNING / PASSED / FAILED / BLOCKED). A gate may only be recorded as closed
+(CLOSED or PASSED) with an evidence path that exists in the repository and a
+closure date. For B2-B6 the evidence must be a committed, NON-synthetic
+execution record of that gate (for B6: status VERIFIED_FROM_SOURCE). The
 ``data``, ``training``, ``evaluation`` and ``results`` sections must be
-consistent with the gates (e.g. data cannot be "acquired" before B2 closes).
+consistent with the gates (e.g. data cannot be "acquired" before B2 passes).
 """
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from brats_uncertainty.errors import ConfigError
+from brats_uncertainty.evaluation.lifecycle import (
+    LIFECYCLE_STATUSES,
+    RECORD_EVIDENCE_GATES,
+    allowed_statuses,
+    check_invariants,
+)
+from brats_uncertainty.evaluation.lifecycle import is_closed as _is_closed
 from brats_uncertainty.utils.io import read_yaml
 from brats_uncertainty.utils.paths import find_repo_root
 
 STATUS_RELPATH = Path("docs/project_status.yaml")
-GATE_STATUSES = (
-    "CLOSED",
-    "OWNER_WAIVED",
-    "IN_PROGRESS",
-    "PENDING",
-    "NOT_STARTED",
-    "BLOCKED",
-    "LOCKED",
+GATE_STATUSES = tuple(
+    dict.fromkeys(("CLOSED", "OWNER_WAIVED", "IN_PROGRESS", "NOT_STARTED", *LIFECYCLE_STATUSES))
 )
-DATA_GATES = tuple(f"B{i}" for i in range(1, 7))
-LOCKABLE_GATES = tuple(f"B{i}" for i in range(7, 13))
 AUTHORIZATION_STATUSES = ("PENDING", "APPROVED", "REFUSED")
 STAGE_STATUSES = ("NOT_STARTED", "IN_PROGRESS", "COMPLETED")
 RESULTS_STATUSES = ("UNAVAILABLE", "AVAILABLE")
@@ -49,7 +52,7 @@ class Gate:
 
     @property
     def is_closed(self) -> bool:
-        return self.status == "CLOSED"
+        return _is_closed(self.status)
 
 
 @dataclass(frozen=True)
@@ -70,10 +73,6 @@ class ProjectStatus:
     @property
     def results_available(self) -> bool:
         return bool(self.raw.get("results", {}).get("available", False))
-
-
-def _order_key(gid: str) -> tuple[str, int]:
-    return gid[0], int(gid[1:]) if len(gid) > 1 else 0
 
 
 def validate_status(raw: dict[str, Any], repo_root: Path) -> dict[str, Gate]:
@@ -102,12 +101,19 @@ def validate_status(raw: dict[str, Any], repo_root: Path) -> dict[str, Gate]:
             raise ConfigError(f"gate {gid}: invalid status {status!r}")
         if status == "OWNER_WAIVED" and not gid.startswith("A"):
             raise ConfigError(f"gate {gid}: only gate-A items may be owner-waived")
+        if status not in allowed_statuses(gid):
+            raise ConfigError(
+                f"gate {gid}: status {status!r} not allowed (allowed: {allowed_statuses(gid)})"
+            )
         evidence = item.get("evidence")
-        if status in ("CLOSED", "OWNER_WAIVED"):
+        if status in ("CLOSED", "OWNER_WAIVED", "PASSED"):
             if not evidence or not item.get("closed_on"):
                 raise ConfigError(f"gate {gid} is {status} without evidence and closed_on")
-            if not (repo_root / str(evidence).split("#")[0]).exists():
+            evidence_path = repo_root / str(evidence).split("#")[0]
+            if not evidence_path.exists():
                 raise ConfigError(f"gate {gid}: evidence path does not exist: {evidence}")
+            if gid in RECORD_EVIDENCE_GATES:
+                _check_record_evidence(gid, evidence_path)
         gates[gid] = Gate(
             id=gid,
             group=gid[0],
@@ -116,22 +122,8 @@ def validate_status(raw: dict[str, Any], repo_root: Path) -> dict[str, Gate]:
             evidence=str(evidence) if evidence else None,
             closed_on=str(item["closed_on"]) if item.get("closed_on") else None,
         )
-    # B gates close strictly in protocol order
-    b_ids = sorted((g for g in gates if g.startswith("B") and len(g) > 1), key=_order_key)
-    seen_open = None
-    for gid in b_ids:
-        if gates[gid].is_closed and seen_open is not None:
-            raise ConfigError(f"gate {gid} is CLOSED while earlier gate {seen_open} is not")
-        if not gates[gid].is_closed and seen_open is None:
-            seen_open = gid
-    # LOCKED only for B7-B12, and only while a data gate B1-B6 is still open
-    data_open = any(not gates[g].is_closed for g in DATA_GATES if g in gates)
-    for gid, gate in gates.items():
-        if gate.status == "LOCKED":
-            if gid not in LOCKABLE_GATES:
-                raise ConfigError(f"gate {gid}: only gates B7-B12 may be LOCKED")
-            if not data_open:
-                raise ConfigError(f"gate {gid} is LOCKED although gates B1-B6 are all closed")
+    # lifecycle invariants: LOCKED iff prerequisites not PASSED; PASSED in protocol order
+    check_invariants({g: gate.status for g, gate in gates.items() if g.startswith("B")})
     _validate_sections(raw, gates)
     for exp_id, exp in raw["experiments"].items():
         if exp.get("status") not in EXPERIMENT_STATUSES:
@@ -139,6 +131,22 @@ def validate_status(raw: dict[str, Any], repo_root: Path) -> dict[str, Gate]:
     if raw["results"].get("available") and not raw["results"].get("evidence"):
         raise ConfigError("results.available is true without evidence")
     return gates
+
+
+def _check_record_evidence(gid: str, path: Path) -> None:
+    """B2-B6 may only pass on a committed, non-synthetic execution record of that gate."""
+    if path.suffix != ".json":
+        raise ConfigError(f"gate {gid}: evidence must be the gate's JSON execution record")
+    try:
+        rec = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ConfigError(f"gate {gid}: evidence record unreadable: {exc}") from exc
+    if rec.get("gate") != gid:
+        raise ConfigError(f"gate {gid}: evidence record belongs to gate {rec.get('gate')!r}")
+    if rec.get("synthetic") is not False:
+        raise ConfigError(f"gate {gid}: synthetic or unlabelled records can never close a gate")
+    if gid == "B6" and rec.get("status") != "VERIFIED_FROM_SOURCE":
+        raise ConfigError("gate B6 can only pass on a VERIFIED_FROM_SOURCE counts record")
 
 
 def _validate_sections(raw: dict[str, Any], gates: dict[str, Gate]) -> None:
@@ -149,13 +157,15 @@ def _validate_sections(raw: dict[str, Any], gates: dict[str, Gate]) -> None:
     if data.get("authorization") not in AUTHORIZATION_STATUSES:
         raise ConfigError(f"data.authorization must be one of {AUTHORIZATION_STATUSES}")
     if (data["authorization"] == "APPROVED") != closed("B1"):
-        raise ConfigError("data.authorization must be APPROVED exactly when gate B1 is CLOSED")
+        raise ConfigError("data.authorization must be APPROVED exactly when gate B1 has PASSED")
+    if data["authorization"] == "REFUSED" and gates["B1"].status not in ("FAILED", "BLOCKED"):
+        raise ConfigError("data.authorization REFUSED requires gate B1 FAILED or BLOCKED")
     if data["authorization"] == "APPROVED" and not data.get("approved_route"):
         raise ConfigError("data.approved_route must name the route approved at B1")
     if data["authorization"] != "APPROVED" and data.get("approved_route"):
         raise ConfigError("data.approved_route is set but B1 authorization is not APPROVED")
-    if bool(data.get("acquired")) and not closed("B2"):
-        raise ConfigError("data.acquired is true but gate B2 is not CLOSED")
+    if bool(data.get("acquired")) != closed("B2"):
+        raise ConfigError("data.acquired must be true exactly when gate B2 has PASSED")
     if raw["training"].get("status") not in STAGE_STATUSES:
         raise ConfigError(f"training.status must be one of {STAGE_STATUSES}")
     if raw["training"]["status"] != "NOT_STARTED" and not closed("B12"):
