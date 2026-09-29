@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Protocol | [FINAL_RESEARCH_PROTOCOL.md](FINAL_RESEARCH_PROTOCOL.md) |
+| Protocol | [FINAL_RESEARCH_PROTOCOL.md](archive/FINAL_RESEARCH_PROTOCOL_v0.5_SUPERSEDED.md) |
 | Change | v0.4 → **v0.5 — AMENDED PRE-FREEZE DRAFT, awaiting owner approval** (**NOT FROZEN**) |
 | Type | **Substantive** (the pre-specified threshold-transfer estimand changed) |
 | Date | 2026-09-28 |

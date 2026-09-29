@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Audit date | 2026-09-28 |
-| Protocol audited | [FINAL_RESEARCH_PROTOCOL.md](FINAL_RESEARCH_PROTOCOL.md) **v0.5 — AMENDED PRE-FREEZE DRAFT, awaiting owner approval (NOT FROZEN)** |
+| Protocol audited | [FINAL_RESEARCH_PROTOCOL.md](archive/FINAL_RESEARCH_PROTOCOL_v0.5_SUPERSEDED.md) **v0.5 — AMENDED PRE-FREEZE DRAFT, awaiting owner approval (NOT FROZEN)** |
 | Protocol modified by this audit | **No** |
 | Scope | Gate-A items A6 (reviewer identities), A7 (BrainLes/BraTS 2024 chapter-level screen), A8 (PNDC full text); static consistency scan |
 

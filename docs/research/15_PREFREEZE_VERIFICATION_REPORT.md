@@ -1,7 +1,7 @@
 # 15 — Pre-Freeze Verification Report
 
 Verification date: 2026-09-27/28 (search and metadata access on those dates).
-Object: [FINAL_RESEARCH_PROTOCOL.md](FINAL_RESEARCH_PROTOCOL.md) **v0.2 — not modified by this report.**
+Object: [FINAL_RESEARCH_PROTOCOL.md](archive/FINAL_RESEARCH_PROTOCOL_v0.5_SUPERSEDED.md) **v0.2 — not modified by this report.**
 
 Evidence labels used throughout:
 

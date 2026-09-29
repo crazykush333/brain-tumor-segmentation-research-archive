@@ -1,46 +1,91 @@
-# Medical data — never commit
+# ---------------------------------------------------------------------------
+# Medical / study data — NEVER commit (see docs/data/DATA_ACCESS.md)
+# ---------------------------------------------------------------------------
 *.nii
 *.nii.gz
 *.dcm
 *.mha
 *.mhd
 *.nrrd
+*.mgz
 *.h5
 *.hdf5
 *.npz
 *.npy
 *.pkl
-data/
-raw_data/
-nnUNet_raw/
-nnUNet_preprocessed/
-nnUNet_results/
+*.pickle
+# Root-level data directories only (anchored, so src/brats_uncertainty/data/
+# and docs/data/ are NOT ignored).
+/data/
+/raw_data/
+/study_data/
+/nnUNet_raw/
+/nnUNet_preprocessed/
+/nnUNet_results/
 **/predictions/
+# Licensed metadata files are not redistributed (IDs-only derivatives may be).
+BraTS2021_MappingToTCIA.xlsx
+UCSF-PDGM-metadata*.csv
+BraTS-Africa_TCIA_datainfo*.xlsx
 
+# ---------------------------------------------------------------------------
 # Models / checkpoints
+# ---------------------------------------------------------------------------
 *.pt
 *.pth
 *.ckpt
+*.onnx
 checkpoints/
 
-# Secrets
+# ---------------------------------------------------------------------------
+# Secrets / credentials
+# ---------------------------------------------------------------------------
 .env
+.env.*
+!.env.example
 *.key
+*.pem
 kaggle.json
+.synapseConfig
+.netrc
+credentials*.json
 
+# ---------------------------------------------------------------------------
 # Python
+# ---------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 *.egg-info/
+build/
+dist/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 .ipynb_checkpoints/
 
+# ---------------------------------------------------------------------------
+# Website (Next.js)
+# ---------------------------------------------------------------------------
+website/node_modules/
+website/.next/
+website/out/
+website/.vercel/
+website/.netlify/
+website/next-env.d.ts
+website/tsconfig.tsbuildinfo
+
+# ---------------------------------------------------------------------------
 # OS / IDE
+# ---------------------------------------------------------------------------
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# Local agent/editor tooling
+.claude/

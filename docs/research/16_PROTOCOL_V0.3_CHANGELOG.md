@@ -5,7 +5,7 @@
 
 | Field | Value |
 |---|---|
-| Protocol | [FINAL_RESEARCH_PROTOCOL.md](FINAL_RESEARCH_PROTOCOL.md) |
+| Protocol | [FINAL_RESEARCH_PROTOCOL.md](archive/FINAL_RESEARCH_PROTOCOL_v0.5_SUPERSEDED.md) |
 | Change | v0.2 → **v0.3 — AMENDED PRE-FREEZE DRAFT, awaiting owner approval** (NOT FROZEN) |
 | Date | 2026-09-28 |
 | Authorization | Owner, 2026-09-28 (controlled amendment A1–A5) |

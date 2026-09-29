@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Date | 2026-09-27 |
-| Protocol | [FINAL_RESEARCH_PROTOCOL.md](FINAL_RESEARCH_PROTOCOL.md) **v0.2 — REVISED DRAFT, awaiting owner approval** |
+| Protocol | [FINAL_RESEARCH_PROTOCOL.md](archive/FINAL_RESEARCH_PROTOCOL_v0.5_SUPERSEDED.md) **v0.2 — REVISED DRAFT, awaiting owner approval** |
 | Authoritative audit | [13_PRE_FREEZE_AUDIT.md](13_PRE_FREEZE_AUDIT.md) (verdict B) |
 | Status | **READY FOR OWNER REVIEW — NOT YET FROZEN** |
 

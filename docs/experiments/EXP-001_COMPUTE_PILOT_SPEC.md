@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Status | **Specification only. Not authorized to run.** |
-| Protocol | [FINAL_RESEARCH_PROTOCOL.md](../research/FINAL_RESEARCH_PROTOCOL.md) v0.4 (pre-freeze), lifecycle gate D, §17.2, SR1, SR6–SR8 |
+| Protocol | [FINAL_RESEARCH_PROTOCOL_v1.0.md](../research/FINAL_RESEARCH_PROTOCOL_v1.0.md) v1.0 (frozen; authoritative), lifecycle gate D, §17.2, SR1, SR6–SR8 |
 | Prepared | 2026-09-28 |
 | Purpose | Replace the compute **ESTIMATES** in §17 with measurements, and decide SR1/SR6 **before** v1.0. |
 | Not a purpose | Any accuracy, calibration or reliability result. EXP-001 produces **no scientific findings**. |

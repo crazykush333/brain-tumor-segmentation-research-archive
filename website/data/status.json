@@ -1,0 +1,346 @@
+{
+  "gate_groups": {
+    "A": "v1.0 freeze blockers",
+    "B": "Post-freeze / pre-split data gates",
+    "C": "Pre-external-evaluation gates",
+    "D": "EXP-001 / compute gates (after B1 approval; before main training)"
+  },
+  "gates": [
+    {
+      "closed_on": "2026-09-28",
+      "group": "A",
+      "id": "A1",
+      "status": "CLOSED",
+      "title": "Primary-endpoint decision implemented (H-W over C4; Full is a control)"
+    },
+    {
+      "closed_on": "2026-09-28",
+      "group": "A",
+      "id": "A2",
+      "status": "CLOSED",
+      "title": "H4 wording resolved (descriptive)"
+    },
+    {
+      "closed_on": "2026-09-28",
+      "group": "A",
+      "id": "A3",
+      "status": "CLOSED",
+      "title": "Confident-failure threshold resolved (tau_0.20)"
+    },
+    {
+      "closed_on": "2026-09-28",
+      "group": "A",
+      "id": "A4",
+      "status": "CLOSED",
+      "title": "Case / patient-group terminology resolved"
+    },
+    {
+      "closed_on": "2026-09-28",
+      "group": "A",
+      "id": "A5",
+      "status": "CLOSED",
+      "title": "T_screen rule frozen (value computed at B7)"
+    },
+    {
+      "closed_on": "2026-09-28",
+      "group": "A",
+      "id": "A6",
+      "status": "CLOSED",
+      "title": "Manual-review procedure and reviewers frozen"
+    },
+    {
+      "closed_on": "2026-09-28",
+      "group": "A",
+      "id": "A7",
+      "status": "OWNER_WAIVED",
+      "title": "BrainLes / BraTS 2024 literature status (pre-submission re-check mandatory)"
+    },
+    {
+      "closed_on": "2026-09-28",
+      "group": "A",
+      "id": "A8",
+      "status": "OWNER_WAIVED",
+      "title": "PNDC full-text check (re-check mandatory if access becomes available)"
+    },
+    {
+      "closed_on": "2026-09-28",
+      "group": "A",
+      "id": "A9",
+      "status": "CLOSED",
+      "title": "Owner approval; protocol frozen as v1.0 and tagged protocol-v1.0"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B1",
+      "status": "PENDING",
+      "title": "Approved data route (TCIA confirmation on private re-hosting, or owner-approved alternative)"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B2",
+      "status": "NOT_STARTED",
+      "title": "Official data acquired via the approved route"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B3",
+      "status": "NOT_STARTED",
+      "title": "SHA-256 recorded for BraTS2021_MappingToTCIA.xlsx as used"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B4",
+      "status": "NOT_STARTED",
+      "title": "SHA-256 recorded for UCSF-PDGM-metadata_v5.csv as used"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B5",
+      "status": "NOT_STARTED",
+      "title": "Data manifest and hashes recorded"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B6",
+      "status": "NOT_STARTED",
+      "title": "Counts re-derived from the hashed crosswalk (1,251 / 511 / 740)"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B7",
+      "status": "NOT_STARTED",
+      "title": "T_screen computed from positive controls; pairwise screen run"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B8",
+      "status": "NOT_STARTED",
+      "title": "Flagged pairs manually reviewed"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B9",
+      "status": "NOT_STARTED",
+      "title": "Patient groups frozen and committed (IDs only)"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B10",
+      "status": "NOT_STARTED",
+      "title": "Final split created once"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B11",
+      "status": "NOT_STARTED",
+      "title": "Split assertions pass"
+    },
+    {
+      "closed_on": null,
+      "group": "B",
+      "id": "B12",
+      "status": "NOT_STARTED",
+      "title": "Split hashes recorded"
+    },
+    {
+      "closed_on": null,
+      "group": "C",
+      "id": "C1",
+      "status": "NOT_STARTED",
+      "title": "BraTS-Africa file-level label verification"
+    },
+    {
+      "closed_on": null,
+      "group": "C",
+      "id": "C2",
+      "status": "NOT_STARTED",
+      "title": "BraTS-Africa four-sequence verification"
+    },
+    {
+      "closed_on": null,
+      "group": "C",
+      "id": "C3",
+      "status": "NOT_STARTED",
+      "title": "BraTS-Africa eligible count frozen (<= 95)"
+    },
+    {
+      "closed_on": null,
+      "group": "C",
+      "id": "C4",
+      "status": "NOT_STARTED",
+      "title": "HOI patient grouping frozen"
+    },
+    {
+      "closed_on": null,
+      "group": "C",
+      "id": "C5",
+      "status": "NOT_STARTED",
+      "title": "Validation-derived tau_q and I frozen"
+    },
+    {
+      "closed_on": null,
+      "group": "C",
+      "id": "C6",
+      "status": "NOT_STARTED",
+      "title": "Evaluation code tagged eval-v1"
+    },
+    {
+      "closed_on": null,
+      "group": "D",
+      "id": "D1",
+      "status": "NOT_STARTED",
+      "title": "Owner authorization of EXP-001"
+    },
+    {
+      "closed_on": null,
+      "group": "D",
+      "id": "D2",
+      "status": "NOT_STARTED",
+      "title": "Approved data route (B1)"
+    },
+    {
+      "closed_on": null,
+      "group": "D",
+      "id": "D3",
+      "status": "NOT_STARTED",
+      "title": "Pilot restricted to site != 1 development cases"
+    },
+    {
+      "closed_on": null,
+      "group": "D",
+      "id": "D4",
+      "status": "NOT_STARTED",
+      "title": "Pilot computes no label-based scientific metrics"
+    },
+    {
+      "closed_on": null,
+      "group": "D",
+      "id": "D5",
+      "status": "NOT_STARTED",
+      "title": "No site-1 or BraTS-Africa data in the pilot"
+    },
+    {
+      "closed_on": null,
+      "group": "D",
+      "id": "D6",
+      "status": "NOT_STARTED",
+      "title": "Compute consequences (SR1, SR6, SR8) applied before main training"
+    }
+  ],
+  "headline": "Protocol v1.0 frozen. Experimental execution pending.",
+  "last_updated": "2026-09-29",
+  "next_step": {
+    "description": "Obtain TCIA confirmation on private third-party re-hosting of BraTS 2021 data (or an owner-approved alternative data route), per protocol §5.1 and SR7. No data acquisition or compute may begin before B1 is closed.",
+    "gate": "B1"
+  },
+  "package_version": "0.1.0",
+  "project": {
+    "central_question": "Among cases with the same missing sequence, can ensemble disagreement identify which cases are likely to fail?",
+    "owner": "Ayush Kushwaha",
+    "research_question": "When MRI sequences are missing at inference, does the case-level ensemble uncertainty of a modality-dropout nnU-Net discriminate unreliable enhancing-tumour segmentations within a given missing-sequence condition, i.e. beyond what the known identity of the missing sequence provides? How does this vary with which sequence is missing, and do the discrimination and operating thresholds transfer to a held-out institution and an external population?",
+    "short_title": "Reliability under missing MRI sequences",
+    "title": "Case-level reliability of glioma segmentation under missing MRI sequences",
+    "type": "Pre-registered empirical evaluation study"
+  },
+  "protocol": {
+    "file": "docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md",
+    "frozen_on": "2026-09-28",
+    "git_tag": "protocol-v1.0",
+    "sha256": "704c0b495917344f44b93e7548ade0e32a71220265419516a2c83d626fcd9811",
+    "status": "FROZEN",
+    "version": "v1.0"
+  },
+  "timeline": [
+    {
+      "date": "2026-09-27",
+      "status": "DONE",
+      "title": "Research-design phase documents (landscape, gaps, options, design)"
+    },
+    {
+      "date": "2026-09-27",
+      "status": "DONE",
+      "title": "Pre-protocol novelty/feasibility audit; protocol draft v0.1"
+    },
+    {
+      "date": "2026-09-27",
+      "status": "DONE",
+      "title": "Adversarial pre-freeze audit; protocol v0.2"
+    },
+    {
+      "date": "2026-09-28",
+      "status": "DONE",
+      "title": "Pre-freeze verification; protocol v0.3, v0.4, v0.5"
+    },
+    {
+      "date": "2026-09-28",
+      "status": "DONE",
+      "title": "Gate-A closure audit (A6-A8)"
+    },
+    {
+      "date": "2026-09-28",
+      "status": "DONE",
+      "title": "Protocol v1.0 frozen and tagged protocol-v1.0"
+    },
+    {
+      "date": "2026-09-29",
+      "status": "DONE",
+      "title": "Research software and reproducibility infrastructure (no data, no experiments)"
+    },
+    {
+      "date": null,
+      "status": "PENDING",
+      "title": "Gate B1: approved data route"
+    },
+    {
+      "date": null,
+      "status": "NOT_STARTED",
+      "title": "Gates B2-B6: data acquisition, hashes, manifest, counts"
+    },
+    {
+      "date": null,
+      "status": "NOT_STARTED",
+      "title": "Gates B7-B9: same-patient screen, review, patient groups"
+    },
+    {
+      "date": null,
+      "status": "NOT_STARTED",
+      "title": "Gates B10-B12: final split, assertions, hashes"
+    },
+    {
+      "date": null,
+      "status": "NOT_STARTED",
+      "title": "Gates D1-D6: EXP-001 compute pilot"
+    },
+    {
+      "date": null,
+      "status": "NOT_STARTED",
+      "title": "Main training (arms A/B x seeds 0-2)"
+    },
+    {
+      "date": null,
+      "status": "NOT_STARTED",
+      "title": "Gates C1-C6: pre-external-evaluation"
+    },
+    {
+      "date": null,
+      "status": "NOT_STARTED",
+      "title": "Internal-test, UPenn HOI and BraTS-Africa evaluation"
+    },
+    {
+      "date": null,
+      "status": "NOT_STARTED",
+      "title": "Analysis, manuscript and submission"
+    }
+  ]
+}

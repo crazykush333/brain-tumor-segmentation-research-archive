@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Audit date | **2026-09-27** |
-| Object | [FINAL_RESEARCH_PROTOCOL.md](FINAL_RESEARCH_PROTOCOL.md) v0.1 (not modified by this audit) |
+| Object | [FINAL_RESEARCH_PROTOCOL.md](archive/FINAL_RESEARCH_PROTOCOL_v0.5_SUPERSEDED.md) v0.1 (not modified by this audit) |
 | Mandate | Attempt to falsify the research question. Audit statistics, datasets and compute. |
 | **Verdict** | **B. PROTOCOL REQUIRES REVISION** |
 
