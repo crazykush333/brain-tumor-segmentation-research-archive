@@ -62,14 +62,43 @@ def fake_source() -> SourceInfo:
     return SourceInfo("FAKE", "fake-1", "10.0000/fake", "https://fake.invalid/source", FAKE_ROUTE)
 
 
-def write_b1_evidence(root: Path, route: str = FAKE_ROUTE) -> str:
+B1_FAKE_FIELDS = {
+    "Protocol version": "v1.0",
+    "Dataset": "FAKE",
+    "DOI": "10.0000/fake",
+    "Inquiry date": "1999-12-01",
+    "Recipient": "fake-provider@fake.invalid",
+    "Sender": "pytest",
+    "Proposed route": FAKE_ROUTE,
+    "Route category": "B",
+    "Evidence type": "TCIA Help Desk written response",
+    "Provider/source": "FAKE provider (temporary test repository)",
+    "Response date": "2000-01-01",
+    "Evidence reference": "FAKE-TICKET-0",
+    "Interpretation": "FAKE: the fake route is permitted",
+    "Restrictions": "None stated",
+    "Attribution requirements": "Cite the FAKE DOI",
+    "Approved route": FAKE_ROUTE,
+    "Authorization status": "AUTHORIZED",
+    "Conclusion": "APPROVED",
+}
+
+
+def b1_evidence_text(wording: str = "> FAKE: this route is fine.", **fields: str) -> str:
+    """FAKE B1 evidence in the template's format; ``fields`` override single values."""
+    values = {**B1_FAKE_FIELDS, **fields}
+    lines = "".join(f"{k}: {v}\n" for k, v in values.items())
+    return (
+        "# FAKE TEST EVIDENCE (temporary test repository)\n\n"
+        f"{lines}\n## Exact provider wording\n\n{wording}\n\n## Notes\n\nFAKE.\n"
+    )
+
+
+def write_b1_evidence(root: Path, route: str = FAKE_ROUTE, text: str | None = None) -> str:
     rel = "docs/data/B1_EVIDENCE_2000-01-01.md"
     (root / rel).parent.mkdir(parents=True, exist_ok=True)
-    (root / rel).write_text(
-        "# FAKE TEST EVIDENCE (temporary test repository)\n\n"
-        f"Evidence type: Owner-approved alternative\nApproved route: {route}\n",
-        encoding="utf-8",
-    )
+    body = text if text is not None else b1_evidence_text(**{"Approved route": route})
+    (root / rel).write_text(body, encoding="utf-8")
     return rel
 
 
@@ -156,8 +185,10 @@ def write_record_copy(root: Path, rel: str, body: dict) -> str:  # type: ignore[
 
 
 __all__ = [
+    "B1_FAKE_FIELDS",
     "FAKE_ROUTE",
     "asdict",
+    "b1_evidence_text",
     "build_fake_chain",
     "fake_stamp",
     "write_b1_evidence",

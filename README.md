@@ -23,7 +23,7 @@ The authoritative definition of everything above is the frozen protocol:
 |---|---|
 | Gate A (protocol freeze blockers A1–A9) | **Closed.** Frozen as v1.0 on 2026-09-28; A7 and A8 are owner-waived with mandatory pre-submission re-checks |
 | Research software and reproducibility infrastructure | Implemented and tested on synthetic inputs only |
-| B1 — data-route authorization (TCIA confirmation or owner-approved alternative) | **Pending.** Authorization record and a ready-to-send TCIA inquiry (not sent) are in [docs/data/](docs/data/B1_DATA_ROUTE_AUTHORIZATION.md) |
+| B1 — data-route authorization (recorded external written authorization from TCIA) | **Pending.** Authorization record, evidence template and a ready-to-send TCIA inquiry (not sent) are in [docs/data/](docs/data/B1_DATA_ROUTE_AUTHORIZATION.md) |
 | B2–B6: data acquisition, metadata hashes, manifest, counts | **Locked** until B1 passes. Software complete and tested on SYNTHETIC_TEST_DATA only; count targets 1,251 / 511 / 740 are protocol verification targets, not verified results |
 | B7–B12: same-patient screen, groups, final split | **Locked** pending B2–B6 |
 | D1–D6: EXP-001 compute pilot | Not started |

@@ -91,7 +91,7 @@
       "group": "B",
       "id": "B1",
       "status": "PENDING",
-      "title": "Approved data route (TCIA confirmation on private re-hosting, or owner-approved alternative)"
+      "title": "Approved data route (recorded external written authorization from TCIA)"
     },
     {
       "closed_on": null,
@@ -258,7 +258,7 @@
   "headline": "Protocol v1.0 frozen. Experimental execution pending.",
   "last_updated": "2026-09-30",
   "next_step": {
-    "description": "Obtain and record written data-route confirmation before B2 data acquisition: send the prepared TCIA inquiry (docs/data/TCIA_DATA_ROUTE_INQUIRY.md) or record an explicit owner-approved alternative route, per protocol §5.1 and SR7. No data acquisition or compute may begin before B1 is closed.",
+    "description": "Send the prepared TCIA inquiry (docs/data/TCIA_DATA_ROUTE_INQUIRY.md) manually and record the written reply with docs/data/B1_EVIDENCE_TEMPLATE.md. B1 passes only on recorded external written authorization (protocol §5.1, SR7). No data acquisition or compute may begin before B1 has passed.",
     "gate": "B1"
   },
   "overview": [
@@ -269,15 +269,15 @@
       "status": "FROZEN"
     },
     {
-      "detail": "B1 record and TCIA inquiry prepared (inquiry not yet sent)",
+      "detail": "B1 record, TCIA inquiry and B1 evidence template prepared (inquiry not yet sent)",
       "key": "route_docs",
       "label": "Data-route documentation",
       "status": "PREPARED"
     },
     {
-      "detail": "written data-route confirmation required before any data acquisition",
+      "detail": "recorded external written authorization (TCIA) required before any data acquisition",
       "key": "b1",
-      "label": "B1 Data authorization",
+      "label": "B1 Data-route authorization",
       "status": "PENDING"
     },
     {
@@ -408,6 +408,11 @@
       "date": "2026-09-30",
       "status": "DONE",
       "title": "B2-B6 software (acquisition adapters, hashing, manifests, count verification, gate state machine) implemented; tested on SYNTHETIC_TEST_DATA only"
+    },
+    {
+      "date": "2026-09-30",
+      "status": "DONE",
+      "title": "B1 authorization workflow finalized: TCIA inquiry final (not yet sent), evidence template, external-written-evidence-only rule"
     },
     {
       "date": null,

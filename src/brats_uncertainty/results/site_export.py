@@ -98,7 +98,7 @@ def build_overview(
     def run(prefix: str, lo: int, hi: int) -> str:
         return _aggregate([gate_status[f"{prefix}{i}"] for i in range(lo, hi + 1)])
 
-    docs = [raw["data"].get("b1_record"), raw["data"].get("inquiry")]
+    docs = [raw["data"].get(k) for k in ("b1_record", "inquiry", "b1_evidence_template")]
     docs_ready = bool(all(docs)) and (
         repo_root is None or all((repo_root / str(d)).is_file() for d in docs)
     )
@@ -119,14 +119,16 @@ def build_overview(
             "key": "route_docs",
             "label": "Data-route documentation",
             "status": "PREPARED" if docs_ready else "NOT_STARTED",
-            "detail": "B1 record and TCIA inquiry prepared"
+            "detail": "B1 record, TCIA inquiry and B1 evidence template prepared"
             + ("" if raw["data"].get("inquiry_sent") else " (inquiry not yet sent)"),
         },
         {
             "key": "b1",
-            "label": "B1 Data authorization",
-            "status": gate_status["B1"],
-            "detail": "written data-route confirmation required before any data acquisition",
+            "label": "B1 Data-route authorization",
+            # B1's authorized state is PASSED in the gate lifecycle; shown as "Authorized"
+            "status": "AUTHORIZED" if gate_status["B1"] == "PASSED" else gate_status["B1"],
+            "detail": "recorded external written authorization (TCIA) required before any "
+            "data acquisition",
         },
     ]
     rows += [

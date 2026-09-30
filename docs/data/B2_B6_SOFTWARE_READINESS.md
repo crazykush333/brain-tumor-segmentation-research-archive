@@ -54,7 +54,7 @@ Reviewed together:
 
 ## 5. Evidence audit
 
-- **B1:** `docs/data/B1_EVIDENCE_<date>.md` with exactly one `Evidence type:` and an `Approved route:` equal to `data.approved_route`. The B1 record, the inquiry and the template are rejected.
+- **B1:** `docs/data/B1_EVIDENCE_<response date>.md` recording external written authorization: every template field exactly once and filled in, an external `Evidence type:`, `Authorization status: AUTHORIZED`, `Conclusion: APPROVED`, the provider's exact wording, and an `Approved route:` equal to `data.approved_route` (tightened after sign-off by the B1 workflow finalization, 2026-09-30). The B1 record, the inquiry and the template are rejected.
 - **B2–B6:** each gate needs its own execution record. The rejected cases below are tested:
 
 | Requirement | Rejected (tested) |

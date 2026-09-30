@@ -8,7 +8,7 @@ Labels used below:
 - **PLANNED WORKFLOW** — what this project intends to do; not yet done.
 - **PENDING PROVIDER CONFIRMATION** — must not be assumed until TCIA confirms in writing.
 
-## 1. Official source information (VERIFIED FACT, 2026-09-29)
+## 1. Official source information (VERIFIED FACT, 2026-09-29; TCIA pages re-verified 2026-09-30)
 
 All sources are official TCIA pages, read in a browser. The statements are short summaries, not legal interpretation.
 
@@ -42,13 +42,13 @@ A public mirror is never used.
 
 | Question | Status |
 |---|---|
-| Is a private, single-user copy on Kaggle permitted, or does it count as "mirroring"? | Pending: ask TCIA ([TCIA_DATA_ROUTE_INQUIRY.md](TCIA_DATA_ROUTE_INQUIRY.md); not yet sent) |
+| Is a private, single-user copy on Kaggle permitted, or does it count as "mirroring"? | Pending: ask TCIA ([TCIA_DATA_ROUTE_INQUIRY.md](TCIA_DATA_ROUTE_INQUIRY.md), six questions; final, not yet sent) |
 | Is runtime-only download into Kaggle/Colab permitted and technically supported? | Pending |
 | Additional attribution, retention or deletion conditions | Pending |
 
 **Nothing in this repository states or implies that Kaggle storage is permitted.** Documentation, URLs, public downloadability or platform access are never treated as authorization.
 
-B1 closes only through `brats-uncertainty gate-transition B1 PASSED --evidence docs/data/B1_EVIDENCE_<date>.md --on <date> --approved-route "<route>" --apply`. The evidence must follow [B1_EVIDENCE_TEMPLATE.md](B1_EVIDENCE_TEMPLATE.md), be staged or committed in git, and name the same route. The B1 record, the inquiry and the template are documentation and are rejected as evidence. That command sets `data.authorization: APPROVED` and unlocks B2 (AUTHORIZED); every other gate stays LOCKED.
+B1 changes from PENDING to AUTHORIZED (gate status `PASSED`) only after actual external written evidence has been recorded: a TCIA Help Desk written response, an explicit official TCIA written instruction, or another clearly authoritative written authorization. It is never inferred from public downloadability, a TCIA web page, the CC licence alone, Kaggle availability, a successful test download or API availability. B1 closes only through `brats-uncertainty gate-transition B1 PASSED --evidence docs/data/B1_EVIDENCE_<response date>.md --on <date> --approved-route "<route>" --apply`. The evidence must follow [B1_EVIDENCE_TEMPLATE.md](B1_EVIDENCE_TEMPLATE.md) with every field filled in from the reply, including `Authorization status: AUTHORIZED`, `Conclusion: APPROVED` and the provider's exact wording. It must be staged or committed in git and name the same route. The B1 record, the inquiry and the template are documentation and are rejected as evidence. That command sets `data.authorization: APPROVED` and unlocks B2 (AUTHORIZED); every other gate stays LOCKED.
 
 ## 4. Runtime acquisition procedure (PLANNED WORKFLOW; locked)
 

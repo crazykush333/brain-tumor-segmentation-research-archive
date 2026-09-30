@@ -147,7 +147,11 @@ def validate_status(raw: dict[str, Any], repo_root: Path) -> dict[str, Gate]:
     passed = {g: evidence_paths[g] for g, gate in gates.items() if gate.status == "PASSED"}
     if "B1" in passed:
         check_b1_evidence(
-            str(gates["B1"].evidence), passed["B1"], raw["data"].get("approved_route")
+            str(gates["B1"].evidence),
+            passed["B1"],
+            raw["data"].get("approved_route"),
+            identity=load_evidence_identity(repo_root),
+            protocol_version=str(raw["protocol"].get("version", "")),
         )
     protocol_sha = str(raw["protocol"].get("sha256", ""))
     if any(gid in passed for gid in RECORD_EVIDENCE_GATES):

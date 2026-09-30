@@ -28,7 +28,11 @@ def _copy_basics(tmp_path: Path) -> None:
     ):
         shutil.copy(REPO_ROOT / rel, tmp_path / rel)
     (tmp_path / "docs/data").mkdir(parents=True, exist_ok=True)
-    for rel in ("docs/data/B1_DATA_ROUTE_AUTHORIZATION.md", "docs/data/TCIA_DATA_ROUTE_INQUIRY.md"):
+    for rel in (
+        "docs/data/B1_DATA_ROUTE_AUTHORIZATION.md",
+        "docs/data/TCIA_DATA_ROUTE_INQUIRY.md",
+        "docs/data/B1_EVIDENCE_TEMPLATE.md",
+    ):
         shutil.copy(REPO_ROOT / rel, tmp_path / rel)
     (tmp_path / "configs/protocol").mkdir(parents=True, exist_ok=True)
     shutil.copy(REPO_ROOT / "configs/protocol/protocol_v1.0.yaml", tmp_path / "configs/protocol/")

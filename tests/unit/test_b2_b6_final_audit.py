@@ -268,7 +268,7 @@ def test_b1_pending_to_authorized_or_passed_requires_machine_checkable_evidence(
     (root / "docs/data/B1_EVIDENCE_2000-01-01.md").write_text(
         "We have permission, trust me.\n", encoding="utf-8"
     )
-    with pytest.raises(ConfigError, match="Evidence type"):
+    with pytest.raises(ConfigError, match="exactly one"):
         write_transition(
             root,
             "B1",

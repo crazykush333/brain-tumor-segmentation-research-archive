@@ -9,11 +9,14 @@ All evidence
     committed or staged.
 
 B1 PASSED
-    ``docs/data/B1_EVIDENCE_<YYYY-MM-DD>.md`` (see B1_EVIDENCE_TEMPLATE.md),
-    declaring ``Evidence type: TCIA written confirmation`` or ``Evidence type:
-    Owner-approved alternative`` and ``Approved route: <data.approved_route>``.
-    The B1 record, the inquiry and the template are documentation, never
-    authorization.
+    ``docs/data/B1_EVIDENCE_<response date>.md`` recording *external written*
+    authorization (see B1_EVIDENCE_TEMPLATE.md): every field of the template
+    exactly once and filled in, an external evidence type (TCIA Help Desk,
+    official TCIA instruction, other authoritative written authorization), the
+    protocol dataset and DOI, ``Approved route: <data.approved_route>``,
+    ``Authorization status: AUTHORIZED``, ``Conclusion: APPROVED`` and the
+    provider's exact wording quoted. The B1 record, the inquiry and the
+    template are documentation, never authorization.
 
 B2-B6 PASSED
     The gate's own execution record, fully re-validated (schema, fingerprint),
@@ -28,6 +31,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -47,7 +51,34 @@ from brats_uncertainty.utils.paths import is_safe_relpath, is_within
 
 _SAFE_PATH = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]*$")
 _B1_EVIDENCE = re.compile(r"^docs/data/B1_EVIDENCE_\d{4}-\d{2}-\d{2}\.md$")
-_B1_TYPES = ("TCIA written confirmation", "Owner-approved alternative")
+_B1_TYPES = (
+    "TCIA Help Desk written response",
+    "Official TCIA written instruction",
+    "Other authoritative written authorization",
+)
+_B1_ROUTE_CATEGORIES = ("A", "B", "C")
+_B1_FIELDS = (
+    "Protocol version",
+    "Dataset",
+    "DOI",
+    "Inquiry date",
+    "Recipient",
+    "Sender",
+    "Proposed route",
+    "Route category",
+    "Evidence type",
+    "Provider/source",
+    "Response date",
+    "Evidence reference",
+    "Interpretation",
+    "Restrictions",
+    "Attribution requirements",
+    "Approved route",
+    "Authorization status",
+    "Conclusion",
+)
+_B1_PLACEHOLDER = re.compile(r"<[^>]*>|\b(?:TBD|TODO|PENDING|FILL)\b|^\?+$", re.IGNORECASE)
+_B1_TEMPLATE_MARKER = "TEMPLATE - NOT EVIDENCE"
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -82,21 +113,81 @@ def check_evidence_committed(evidence: Mapping[str, str], git: GitView) -> None:
             raise ConfigError(f"gate {gid}: evidence must be committed or staged in git: {rel}")
 
 
-def check_b1_evidence(rel: str, path: Path, approved_route: str | None) -> None:
+def _b1_fields(text: str) -> dict[str, str]:
+    """Each machine-checked B1 field exactly once at the start of a line, with a real value."""
+    out: dict[str, str] = {}
+    for name in _B1_FIELDS:
+        found = re.findall(rf"(?m)^{re.escape(name)}:[ \t]*(.*?)[ \t]*$", text)
+        if len(found) != 1:
+            raise ConfigError(f"gate B1: evidence must contain exactly one '{name}:' line")
+        value = found[0]
+        if not value or _B1_PLACEHOLDER.search(value):
+            raise ConfigError(f"gate B1: evidence field '{name}:' is empty or a placeholder")
+        out[name] = value
+    return out
+
+
+def _b1_date(name: str, value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ConfigError(f"gate B1: evidence '{name}:' must be YYYY-MM-DD: {value!r}") from exc
+
+
+def check_b1_evidence(
+    rel: str,
+    path: Path,
+    approved_route: str | None,
+    *,
+    identity: Mapping[str, Any],
+    protocol_version: str,
+) -> None:
+    """B1 may pass only on recorded external written authorization (never inferred)."""
     if not _B1_EVIDENCE.match(rel):
         raise ConfigError(
             "gate B1: evidence must be docs/data/B1_EVIDENCE_<YYYY-MM-DD>.md "
-            "(documentation such as the B1 record or the inquiry is not authorization)"
+            "(documentation such as the B1 record, the inquiry or the template is not "
+            "authorization)"
         )
     text = path.read_text(encoding="utf-8")
-    types = [t for t in _B1_TYPES if re.search(rf"(?m)^Evidence type:\s*{re.escape(t)}\s*$", text)]
-    if len(types) != 1:
+    if _B1_TEMPLATE_MARKER in text or "<FILL" in text:
+        raise ConfigError("gate B1: evidence is an unfilled copy of the template")
+    f = _b1_fields(text)
+    if f["Evidence type"] not in _B1_TYPES:
         raise ConfigError(
-            f"gate B1: evidence must declare exactly one 'Evidence type:' of {_B1_TYPES}"
+            f"gate B1: 'Evidence type:' must be one of {_B1_TYPES} (external written "
+            "authorization only; public downloadability, web pages, the licence, Kaggle "
+            "availability, a test download or API availability are not authorization)"
         )
-    m = re.search(r"(?m)^Approved route:\s*(.+?)\s*$", text)
-    if not m or not approved_route or m.group(1) != approved_route:
+    if f["Protocol version"] != protocol_version:
+        raise ConfigError(f"gate B1: evidence 'Protocol version:' must be {protocol_version}")
+    if f["Dataset"] != identity["dataset"] or f["DOI"] != identity["doi"]:
+        raise ConfigError(
+            f"gate B1: evidence must name dataset {identity['dataset']!r} "
+            f"and DOI {identity['doi']!r}"
+        )
+    if f["Route category"] not in _B1_ROUTE_CATEGORIES:
+        raise ConfigError(f"gate B1: 'Route category:' must be one of {_B1_ROUTE_CATEGORIES}")
+    if not approved_route or f["Approved route"] != approved_route:
         raise ConfigError("gate B1: evidence 'Approved route:' must equal data.approved_route")
+    inquiry = _b1_date("Inquiry date", f["Inquiry date"])
+    response = _b1_date("Response date", f["Response date"])
+    if response < inquiry:
+        raise ConfigError("gate B1: 'Response date:' precedes 'Inquiry date:'")
+    if not rel.endswith(f"B1_EVIDENCE_{response.isoformat()}.md"):
+        raise ConfigError("gate B1: evidence file name must carry the 'Response date:'")
+    if f["Authorization status"] != "AUTHORIZED" or f["Conclusion"] != "APPROVED":
+        raise ConfigError(
+            "gate B1: evidence must record 'Authorization status: AUTHORIZED' and "
+            "'Conclusion: APPROVED' (anything else keeps B1 PENDING, FAILED or BLOCKED)"
+        )
+    wording = re.search(r"(?ms)^## Exact provider wording[ \t]*$(.*?)(?=^#{1,2} |\Z)", text)
+    quoted = [ln for ln in (wording.group(1) if wording else "").splitlines() if ln.startswith(">")]
+    if not any(ln.lstrip("> ").strip() for ln in quoted):
+        raise ConfigError(
+            "gate B1: evidence must quote the provider's exact wording ('> ' lines) under "
+            "'## Exact provider wording'"
+        )
 
 
 IDENTITY_CONFIG = Path("configs/dataset/brats2021.yaml")
