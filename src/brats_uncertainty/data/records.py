@@ -35,7 +35,7 @@ from brats_uncertainty.utils.environment import capture_environment
 from brats_uncertainty.utils.git import git_commit, git_is_dirty
 from brats_uncertainty.utils.hashing import sha256_file, sha256_json
 from brats_uncertainty.utils.io import read_json, write_json
-from brats_uncertainty.utils.paths import is_safe_relpath
+from brats_uncertainty.utils.paths import is_link, is_safe_relpath
 
 RECORD_SCHEMA_VERSION = 3
 _SHA = re.compile(r"^[0-9a-f]{64}$")
@@ -55,6 +55,7 @@ COUNT_STATES = (
     "VERIFIED_FROM_SOURCE",  # REAL_RESEARCH_DATA crosswalk matched all targets
     "SYNTHETIC_TEST_ONLY",  # SYNTHETIC_TEST_DATA crosswalk matched (software test; never evidence)
     "FAILED_VERIFICATION",  # any mismatch
+    "UNAVAILABLE",  # no source has been processed (gate B6 not executed)
 )
 # Explicit data classes, recorded in every record and manifest (not inferred from names).
 SYNTHETIC_TEST_DATA = "SYNTHETIC_TEST_DATA"
@@ -152,7 +153,7 @@ def inventory(root: str | Path) -> tuple[InventoryEntry, ...]:
     r = Path(root)
     entries = []
     for p in sorted(r.rglob("*")):
-        if p.is_symlink():
+        if is_link(p):
             raise ProvenanceError(f"symbolic link in storage is not allowed: {p.relative_to(r)}")
         if p.is_file():
             entries.append(
@@ -358,6 +359,8 @@ def write_record(path: str | Path, record: Record) -> Path:
 
 def read_record_body(path: str | Path) -> dict[str, Any]:
     body: dict[str, Any] = read_json(path)
+    if not isinstance(body, dict):
+        raise ProvenanceError(f"{path}: a record must be a JSON object")
     if body.get("schema_version") != RECORD_SCHEMA_VERSION:
         raise ProvenanceError(f"{path}: unsupported record schema {body.get('schema_version')!r}")
     if body.get("record_fingerprint") != fingerprint(body):

@@ -121,6 +121,10 @@ def write_transition(
         )
     validate_status(reparsed, repo_root)
     tmp = path.with_name(path.name + ".part")
-    tmp.write_text(text, encoding="utf-8", newline="\n")
-    os.replace(tmp, path)  # atomic
+    try:
+        tmp.write_text(text, encoding="utf-8", newline="\n")
+        os.replace(tmp, path)  # atomic: the old file stays intact until this succeeds
+    finally:
+        if tmp.exists():
+            tmp.unlink()  # never leave a partial file behind
     return changes

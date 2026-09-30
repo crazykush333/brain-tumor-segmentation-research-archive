@@ -8,6 +8,16 @@ source:
   route: null                     # set only after gate B1 closes
 data_root_env: BRATS2021_DATA_ROOT
 
+# Identity that B2/B3/B4/B5 evidence records must carry (checked by
+# brats_uncertainty.data.evidence). Values verified on the official pages
+# 2026-09-29 (docs/data/DATA_ACCESS.md §1).
+evidence_identity:
+  dataset: "RSNA-ASNR-MICCAI-BraTS-2021"
+  doi: "10.7937/jc8x-9874"
+  official_source_prefixes:
+    - "https://www.cancerimagingarchive.net/"
+    - "https://www.synapse.org/"
+
 layout:
   # Conventional BraTS 2021 file naming. Must be confirmed on the acquired files (B5).
   verified_on_files: false
@@ -15,8 +25,9 @@ layout:
   modality_suffixes: {T1: "_t1", T1c: "_t1ce", T2: "_t2", FLAIR: "_flair"}
   label_suffix: "_seg"
   file_ending: ".nii.gz"
-  # Expected volume shape. Deliberately unset: set it only after confirming the
-  # shape on the acquired files at B5 (mismatches are then reported as warnings).
+  # Expected volume shape. Deliberately unset. It may only be set BEFORE B5/B6 run:
+  # this file's SHA-256 is recorded in B5/B6 evidence, and any later change makes
+  # that evidence stale (rejected by the status validator).
   expected_shape: null
 
 labels:

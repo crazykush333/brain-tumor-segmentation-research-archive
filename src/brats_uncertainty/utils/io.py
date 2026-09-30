@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml
 
+from brats_uncertainty.utils.paths import is_link
+
 
 def write_json(path: str | Path, obj: Any, *, overwrite: bool = False) -> Path:
     """Write ``obj`` as pretty, key-sorted JSON atomically.
@@ -18,6 +20,10 @@ def write_json(path: str | Path, obj: Any, *, overwrite: bool = False) -> Path:
     frozen artifacts (manifests, splits, groupings) cannot be silently replaced.
     """
     p = Path(path)
+    if is_link(p):  # never write through (or replace) a link, including a broken one
+        raise FileExistsError(f"refusing to write to a link: {p}")
+    if p.is_dir():
+        raise IsADirectoryError(f"destination is a directory: {p}")
     if p.exists() and not overwrite:
         raise FileExistsError(f"refusing to overwrite existing file: {p}")
     p.parent.mkdir(parents=True, exist_ok=True)

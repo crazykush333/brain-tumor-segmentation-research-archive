@@ -1,6 +1,6 @@
 """Adversarial audit tests for the integrated B2-B6 infrastructure.
 
-Invariants A-N (see docs/reproducibility/B2_B6_SOFTWARE_READINESS.md) and edge
+Invariants A-N (see docs/data/B2_B6_SOFTWARE_READINESS.md) and edge
 cases. Only SYNTHETIC_TEST_DATA and FAKE evidence in temporary directories are
 used; the real repository status is read-only here.
 """

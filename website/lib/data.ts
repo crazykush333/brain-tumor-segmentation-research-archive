@@ -62,6 +62,7 @@ export interface Status {
   overview: OverviewItem[];
   count_verification: {
     status: string;
+    verification: string;
     label: string;
     targets: Record<string, number>;
     counts?: Record<string, number>;

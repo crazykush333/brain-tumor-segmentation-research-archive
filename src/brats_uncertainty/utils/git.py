@@ -79,19 +79,35 @@ class GitView:
         if not relpaths:
             return set()
         try:
+            # NUL-separated binary I/O. Text mode turns "\n" into "\r\n" on Windows, so git
+            # would test (and quote) a different path and the check would never match.
             proc = subprocess.run(
-                ["git", "check-ignore", "--no-index", "--stdin"],
+                ["git", "check-ignore", "--no-index", "-z", "--stdin"],
                 cwd=self.root,
-                input="\n".join(relpaths) + "\n",
+                input=b"\0".join(r.encode("utf-8") for r in relpaths) + b"\0",
                 capture_output=True,
-                text=True,
                 timeout=30,
             )
         except (OSError, subprocess.TimeoutExpired):
             return set(relpaths)  # fail closed: treat as ignored
         if proc.returncode not in (0, 1):
-            return set(relpaths)
-        return {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+            return set(relpaths)  # fail closed
+        return {p.decode("utf-8") for p in proc.stdout.split(b"\0") if p}
+
+    def is_ancestor(self, commit: str) -> bool:
+        """True if ``commit`` is HEAD or one of its ancestors (not from another history)."""
+        if not self.is_repo:
+            return True
+        try:
+            proc = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
+                cwd=self.root,
+                capture_output=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False  # fail closed
+        return proc.returncode == 0
 
     def commit_exists(self, commit: str) -> bool:
         if commit not in self._commits:

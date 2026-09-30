@@ -162,19 +162,52 @@ def build_overview(
     return rows
 
 
+def count_verification_state(
+    repo_root: Path, raw: dict[str, Any]
+) -> tuple[str, dict[str, Any] | None]:
+    """B6 verification state derived ONLY from the gate status and its evidence record.
+
+    - UNAVAILABLE: B6 has not produced a result (LOCKED/AUTHORIZED/RUNNING/BLOCKED);
+    - VERIFIED_FROM_SOURCE: B6 PASSED on a REAL_RESEARCH_DATA record with that status;
+    - FAILED_VERIFICATION: B6 FAILED.
+    The protocol targets alone can never yield VERIFIED_FROM_SOURCE.
+    """
+    b6 = next((g for g in raw["gates"] if g["id"] == "B6"), None)
+    if b6 is None:
+        return "UNAVAILABLE", None
+    if b6.get("status") == "FAILED":
+        return "FAILED_VERIFICATION", None
+    if b6.get("status") == "PASSED":
+        rec = read_record_body(repo_root / str(b6["evidence"]))
+        if (
+            rec.get("status") != "VERIFIED_FROM_SOURCE"
+            or rec.get("synthetic") is not False
+            or rec.get("data_class") != "REAL_RESEARCH_DATA"
+        ):
+            raise ProvenanceError(
+                "B6 is PASSED but its evidence is not a verified real-data record"
+            )
+        return "VERIFIED_FROM_SOURCE", rec
+    return "UNAVAILABLE", None
+
+
 def build_count_block(repo_root: Path, raw: dict[str, Any]) -> dict[str, Any]:
     """B6 counts for display: protocol targets unless a PASSED, verified B6 record exists."""
     block = protocol_count_targets()
-    b6 = next((g for g in raw["gates"] if g["id"] == "B6"), None)
-    if b6 and b6.get("status") == "PASSED" and b6.get("evidence"):
-        rec = read_record_body(repo_root / str(b6["evidence"]))
-        if rec.get("status") == "VERIFIED_FROM_SOURCE" and rec.get("synthetic") is False:
-            block = {
-                "status": "VERIFIED_FROM_SOURCE",
-                "label": "Counts verified from the hashed crosswalk (gate B6)",
-                "targets": rec["targets"],
-                "counts": rec["counts"],
-            }
+    state, rec = count_verification_state(repo_root, raw)
+    block["verification"] = state
+    if state == "VERIFIED_FROM_SOURCE" and rec is not None:
+        block.update(
+            status="VERIFIED_FROM_SOURCE",
+            label="Counts verified from the hashed crosswalk (gate B6)",
+            targets=rec["targets"],
+            counts=rec["counts"],
+        )
+    elif state == "FAILED_VERIFICATION":
+        block.update(
+            status="FAILED_VERIFICATION",
+            label="Protocol verification targets (gate B6 verification FAILED; see B6 evidence)",
+        )
     return block
 
 

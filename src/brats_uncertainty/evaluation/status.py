@@ -23,6 +23,7 @@ from brats_uncertainty.data.evidence import (
     check_evidence_committed,
     check_evidence_path,
     check_record_evidence,
+    load_evidence_identity,
 )
 from brats_uncertainty.errors import ConfigError
 from brats_uncertainty.evaluation.lifecycle import (
@@ -149,9 +150,19 @@ def validate_status(raw: dict[str, Any], repo_root: Path) -> dict[str, Gate]:
             str(gates["B1"].evidence), passed["B1"], raw["data"].get("approved_route")
         )
     protocol_sha = str(raw["protocol"].get("sha256", ""))
-    for gid in RECORD_EVIDENCE_GATES:
-        if gid in passed:
-            check_record_evidence(gid, passed[gid], git, protocol_sha, passed)
+    if any(gid in passed for gid in RECORD_EVIDENCE_GATES):
+        identity = load_evidence_identity(repo_root)
+        for gid in RECORD_EVIDENCE_GATES:
+            if gid in passed:
+                check_record_evidence(
+                    gid,
+                    passed[gid],
+                    git,
+                    protocol_sha,
+                    passed,
+                    repo_root=repo_root,
+                    identity=identity,
+                )
     for exp_id, exp in raw["experiments"].items():
         if exp.get("status") not in EXPERIMENT_STATUSES:
             raise ConfigError(f"experiment {exp_id}: invalid status {exp.get('status')!r}")

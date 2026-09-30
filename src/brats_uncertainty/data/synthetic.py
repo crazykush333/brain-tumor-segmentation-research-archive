@@ -27,7 +27,7 @@ from pathlib import Path
 from brats_uncertainty import __version__
 from brats_uncertainty.errors import ProvenanceError
 from brats_uncertainty.utils.hashing import sha256_file
-from brats_uncertainty.utils.paths import is_within
+from brats_uncertainty.utils.paths import is_link, is_within
 
 SYNTHETIC_LABEL = "SYNTHETIC_TEST_DATA"
 MARKER_NAME = "SYNTHETIC_TEST_DATA.json"
@@ -158,12 +158,12 @@ def require_synthetic(paths: list[Path], repo_root: str | Path) -> Path:
     listed: dict[str, str] = marker["files"]
     for p in paths:
         p = Path(p)
-        if p.is_symlink():
+        if is_link(p):
             raise ProvenanceError("symbolic links are not SYNTHETIC_TEST_DATA files")
         p = p.resolve()
-        targets = [f for f in p.rglob("*") if f.is_file() or f.is_symlink()] if p.is_dir() else [p]
+        targets = [f for f in p.rglob("*") if f.is_file() or is_link(f)] if p.is_dir() else [p]
         for f in targets:
-            if f.is_symlink():
+            if is_link(f):
                 raise ProvenanceError("symbolic links are not SYNTHETIC_TEST_DATA files")
             try:
                 rel = f.relative_to(root).as_posix()

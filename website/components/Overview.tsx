@@ -61,7 +61,9 @@ export function CountVerification() {
   return (
     <div className="my-4 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
       <p className="mb-2 text-sm font-semibold">{c.label}</p>
-      <p className="mb-3 text-xs uppercase tracking-wide text-slate-500">Status: {c.status.replace(/_/g, " ")}</p>
+      <p className="mb-3 text-xs uppercase tracking-wide text-slate-500">
+        Targets: {c.status.replace(/_/g, " ")} · B6 verification: {c.verification.replace(/_/g, " ")}
+      </p>
       <table className="table-base">
         <thead>
           <tr>

@@ -52,6 +52,18 @@ Properties:
 
   B6 can only pass on `VERIFIED_FROM_SOURCE`. The status validator enforces all of this on every load.
 - FAILED never returns to execution directly. FAILED goes to BLOCKED (with evidence), and BLOCKED goes to AUTHORIZED only with an owner-decision document.
+- **Identity:** evidence must describe the protocol dataset. The dataset name and DOI must match `evidence_identity` in `configs/dataset/brats2021.yaml`, and the source must be an official one (TCIA or Synapse). Evidence for another dataset, or from a mirror, is rejected.
+- **Stale evidence is rejected:**
+  - a record whose hashed configuration file was changed or removed afterwards;
+  - a record whose commit is not in the history of HEAD (e.g. a rewritten or foreign history);
+  - a record from another protocol version or hash;
+  - a source file changed after hashing, which B5 and B6 detect against the B3/B4 records.
+- **B6 display states:**
+  - `EXPECTED_BY_PROTOCOL`: the targets;
+  - `UNAVAILABLE`: nothing processed yet;
+  - `VERIFIED_FROM_SOURCE`: only from a PASSED real B6 record;
+  - `FAILED_VERIFICATION`;
+  - `SYNTHETIC_TEST_ONLY`: synthetic records only; never displayed as verification.
 - Software never advances a gate. The owner runs `gate-transition` (dry run by default, `--apply` to write) after reviewing the record.
 
 ## 3. Reproducing B2–B6 (future researcher)

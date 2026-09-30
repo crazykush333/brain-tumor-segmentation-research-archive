@@ -45,8 +45,10 @@ from brats_uncertainty.data.records import (
     write_record,
 )
 from brats_uncertainty.data.synthetic import (
+    MARKER_NAME,
     SYNTHETIC_ROUTE,
     SyntheticDataset,
+    find_marker_root,
     generate_synthetic_dataset,
     require_synthetic,
 )
@@ -54,7 +56,7 @@ from brats_uncertainty.errors import DataValidationError, ProvenanceError, Resea
 from brats_uncertainty.evaluation.guards import ACQUISITION_LOCKED_MESSAGE, require_action
 from brats_uncertainty.evaluation.status import load_status
 from brats_uncertainty.utils.logging import get_logger, log_event
-from brats_uncertainty.utils.paths import is_safe_relpath, is_within
+from brats_uncertainty.utils.paths import is_link, is_safe_relpath, is_within
 
 _LOG = get_logger("acquisition")
 _CHUNK = 1 << 20
@@ -124,12 +126,12 @@ class LocalImportAdapter(AcquisitionAdapter):
         self.delivered = Path(delivered)
 
     def _files(self) -> list[Path]:
-        if self.delivered.is_symlink() or not self.delivered.exists():
+        if is_link(self.delivered) or not self.delivered.exists():
             raise DataValidationError(f"delivered path not found or a link: {self.delivered.name}")
         if self.delivered.is_file():
             return [self.delivered]
         found = sorted(self.delivered.rglob("*"))
-        links = [p.name for p in found if p.is_symlink()]
+        links = [p.name for p in found if is_link(p)]
         if links:
             raise DataValidationError(
                 f"symbolic links in the delivered tree are refused: {links[:3]}"
@@ -294,6 +296,15 @@ def stage_acquire(
         if clock is not utc_now:
             raise ProvenanceError("a custom clock is only allowed for SYNTHETIC_TEST_DATA runs")
         assert_real_acquisition_authorized(repo_root, adapter)
+        if is_link(storage_root):
+            raise ProvenanceError("storage root may not be a link")
+        if isinstance(adapter, LocalImportAdapter) and (
+            find_marker_root(adapter.delivered) is not None
+            or any(p.name == MARKER_NAME for p in adapter._files())
+        ):
+            raise ProvenanceError(
+                "SYNTHETIC_TEST_DATA cannot be acquired through a real-data adapter"
+            )
         if is_within(storage_root, repo_root) and not is_within(storage_root, repo_root / "data"):
             raise ProvenanceError(
                 "real data inside the repository may only be stored under the "
@@ -311,6 +322,9 @@ def stage_acquire(
     adapter.execute(storage_root)
     if adapter.synthetic:
         require_synthetic([storage_root], repo_root)
+    inv = inventory(storage_root)
+    if not adapter.synthetic and any(Path(e.relpath).name == MARKER_NAME for e in inv):
+        raise ProvenanceError("a SYNTHETIC_TEST_DATA marker appeared in real storage")
     record = AcquisitionRecord(
         gate="B2",
         synthetic=adapter.synthetic,
@@ -319,7 +333,7 @@ def stage_acquire(
         acquired_at=clock().isoformat(),
         acquired_by=acquired_by,
         storage_location=label,
-        inventory=inventory(storage_root),
+        inventory=inv,
         stamp=make_stamp(
             repo_root,
             require_clean_commit=require_clean_commit and not adapter.synthetic,

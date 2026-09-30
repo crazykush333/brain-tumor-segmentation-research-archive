@@ -48,7 +48,7 @@ from brats_uncertainty.evaluation.guards import require_action
 from brats_uncertainty.protocol import load_protocol
 from brats_uncertainty.utils.hashing import sha256_bytes, sha256_file
 from brats_uncertainty.utils.io import read_yaml, write_json
-from brats_uncertainty.utils.paths import is_within
+from brats_uncertainty.utils.paths import is_link, is_within
 
 METADATA_GATES = {
     "B3": ("record_crosswalk_hash", "crosswalk", CROSSWALK_FILENAME),
@@ -77,7 +77,7 @@ def _enter(
             raise ProvenanceError("a custom clock is only allowed for SYNTHETIC_TEST_DATA runs")
         require_action(action, repo_root)
     for p in inputs:
-        if Path(p).is_symlink():
+        if is_link(Path(p)):
             raise ProvenanceError(f"{Path(p).name}: symbolic links are not accepted as inputs")
         if not Path(p).exists():
             raise DataValidationError(f"input not found: {Path(p).name} (no source, no record)")
@@ -152,7 +152,7 @@ def stage_validate_data(
 ) -> IntegrityReport:
     """Integrity audit of acquired files (real mode requires B1 PASSED and B2 runnable/passed)."""
     _enter(repo_root, "validate_data", [data_root], [], synthetic)
-    if any(p.is_symlink() for p in data_root.rglob("*")):
+    if any(is_link(p) for p in data_root.rglob("*")):
         raise ProvenanceError("symbolic links are not allowed in the data tree")
     cfg = read_yaml(dataset_config)
     return validate_dataset_tree(
@@ -243,8 +243,12 @@ def stage_build_manifest(
     write_json(out_json, doc)
     if out_csv:
         tmp = out_csv.with_suffix(out_csv.suffix + ".part")
-        tmp.write_text(manifest_to_csv(doc), encoding="utf-8", newline="\n")
-        tmp.replace(out_csv)  # atomic: no partial CSV on interruption
+        try:
+            tmp.write_text(manifest_to_csv(doc), encoding="utf-8", newline="\n")
+            tmp.replace(out_csv)  # atomic: no partial CSV on interruption
+        finally:
+            if tmp.exists():
+                tmp.unlink()
     return doc
 
 

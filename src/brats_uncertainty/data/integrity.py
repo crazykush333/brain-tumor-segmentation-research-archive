@@ -29,6 +29,7 @@ from typing import Any
 from brats_uncertainty.data.manifest import Manifest, verify_manifest
 from brats_uncertainty.data.schema import DatasetSchema
 from brats_uncertainty.preprocessing.modalities import MODALITIES
+from brats_uncertainty.utils.paths import is_link
 
 _CHUNK = 1 << 20
 
@@ -146,6 +147,9 @@ def validate_dataset_tree(
     found: dict[str, str] = {}
     for entry in sorted(root.iterdir()):
         rel = entry.name
+        if is_link(entry):
+            report.add("error", "link", rel, "symbolic link or junction (not followed)")
+            continue
         if entry.is_file():
             report.add(
                 "warning", "unexpected_file", rel, "file at top level (expected case directories)"
@@ -190,7 +194,10 @@ def _validate_case(
 ) -> None:
     expected_names = {schema.image_name(case_id, m): m for m in MODALITIES}
     label_name = schema.label_name(case_id)
-    present = {p.name for p in case_dir.iterdir()}
+    links = sorted(p.name for p in case_dir.iterdir() if is_link(p))
+    for name in links:
+        report.add("error", "link", f"{case_id}/{name}", "symbolic link or junction (not followed)")
+    present = {p.name for p in case_dir.iterdir() if not is_link(p)}
     for name in sorted(present - set(expected_names) - {label_name}):
         report.add(
             "warning", "unexpected_file", f"{case_id}/{name}", "file not in the dataset schema"

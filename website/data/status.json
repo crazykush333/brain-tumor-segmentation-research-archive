@@ -6,7 +6,8 @@
       "development": 740,
       "held_out_institution": 511,
       "total": 1251
-    }
+    },
+    "verification": "UNAVAILABLE"
   },
   "data": {
     "acquired": false,

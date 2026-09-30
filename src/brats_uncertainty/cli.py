@@ -219,13 +219,17 @@ def _cmd_derive_counts(root: Path, args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_count_targets(_: Path, __: argparse.Namespace) -> int:
-    from brats_uncertainty.data.records import protocol_count_targets
+def _cmd_count_targets(root: Path, __: argparse.Namespace) -> int:
+    from brats_uncertainty.evaluation.status import load_status
+    from brats_uncertainty.results.site_export import build_count_block
 
-    t = protocol_count_targets()
+    t = build_count_block(root, load_status(root).raw)
     print(f"{t['status']}: {t['label']}")
+    print(f"B6 verification state: {t['verification']}")
     for k, v in t["targets"].items():
-        print(f"  {k}: {v}")
+        print(f"  target {k}: {v}")
+    for k, v in (t.get("counts") or {}).items():
+        print(f"  verified {k}: {v}")
     return 0
 
 

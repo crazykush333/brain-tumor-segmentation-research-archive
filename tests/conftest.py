@@ -32,6 +32,15 @@ def _copy_basics(tmp_path: Path) -> None:
         shutil.copy(REPO_ROOT / rel, tmp_path / rel)
     (tmp_path / "configs/protocol").mkdir(parents=True, exist_ok=True)
     shutil.copy(REPO_ROOT / "configs/protocol/protocol_v1.0.yaml", tmp_path / "configs/protocol/")
+    # FAKE dataset identity for fake evidence (the real config names the real dataset)
+    cfg = yaml.safe_load((REPO_ROOT / "configs/dataset/brats2021.yaml").read_text(encoding="utf-8"))
+    cfg["evidence_identity"] = {
+        "dataset": "FAKE",
+        "doi": "10.0000/fake",
+        "official_source_prefixes": ["https://fake.invalid/"],
+    }
+    (tmp_path / "configs/dataset").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "configs/dataset/brats2021.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
 
 
 def make_status_repo(tmp_path: Path, closed: set[str]) -> Path:

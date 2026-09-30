@@ -41,7 +41,8 @@ from brats_uncertainty.data.records import (
 )
 from brats_uncertainty.errors import ConfigError, DataValidationError, ProvenanceError
 from brats_uncertainty.utils.git import GitView
-from brats_uncertainty.utils.io import read_json
+from brats_uncertainty.utils.hashing import sha256_file
+from brats_uncertainty.utils.io import read_json, read_yaml
 from brats_uncertainty.utils.paths import is_safe_relpath, is_within
 
 _SAFE_PATH = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]*$")
@@ -98,6 +99,60 @@ def check_b1_evidence(rel: str, path: Path, approved_route: str | None) -> None:
         raise ConfigError("gate B1: evidence 'Approved route:' must equal data.approved_route")
 
 
+IDENTITY_CONFIG = Path("configs/dataset/brats2021.yaml")
+
+
+def load_evidence_identity(repo_root: Path) -> dict[str, Any]:
+    """Dataset identity that real evidence must carry (fails closed if absent)."""
+    path = repo_root / IDENTITY_CONFIG
+    try:
+        ident = read_yaml(path)["evidence_identity"]
+        out = {
+            "dataset": str(ident["dataset"]),
+            "doi": str(ident["doi"]),
+            "prefixes": tuple(str(p) for p in ident["official_source_prefixes"]),
+        }
+    except (OSError, KeyError, TypeError) as exc:
+        raise ConfigError(f"evidence identity missing in {IDENTITY_CONFIG}: {exc}") from exc
+    if not out["prefixes"] or not all(p.startswith("https://") for p in out["prefixes"]):
+        raise ConfigError("evidence identity: official_source_prefixes must be https URLs")
+    return out
+
+
+def _check_identity(gid: str, body: Mapping[str, Any], identity: Mapping[str, Any]) -> None:
+    """Evidence must describe the protocol dataset from an official source (not another dataset)."""
+    if gid == "B2":
+        src = body["source"]
+        dataset, doi, url = src["dataset"], src["doi"], src["source_url"]
+    elif gid == "B5":
+        dataset, doi, url = body["dataset"], body["doi"], body["source_url"]
+    elif gid == "B3":
+        dataset, doi, url = identity["dataset"], body["doi"], body["source_url"]
+    elif gid == "B4":  # UCSF-PDGM collection: official source required, DOI not compared
+        dataset, doi, url = identity["dataset"], identity["doi"], body["source_url"]
+    else:
+        return
+    if dataset != identity["dataset"] or doi != identity["doi"]:
+        raise ConfigError(
+            f"gate {gid}: evidence describes dataset {dataset!r} (doi {doi!r}), "
+            f"not {identity['dataset']!r} (doi {identity['doi']!r})"
+        )
+    if not str(url).startswith(tuple(identity["prefixes"])):
+        raise ConfigError(f"gate {gid}: evidence source {url!r} is not an official source")
+
+
+def _check_config_fresh(gid: str, stamp: Mapping[str, Any], repo_root: Path) -> None:
+    """Every configuration hashed into the record must still exist unchanged (no stale evidence)."""
+    for rel, sha in dict(stamp.get("config_sha256") or {}).items():
+        path = repo_root / str(rel)
+        if not path.is_file():
+            raise ConfigError(f"gate {gid}: stale evidence: configuration {rel} no longer exists")
+        if sha256_file(path) != sha:
+            raise ConfigError(
+                f"gate {gid}: stale evidence: configuration {rel} changed after the record"
+            )
+
+
 def _check_stamp(gid: str, stamp: Mapping[str, Any], git: GitView, protocol_sha256: str) -> None:
     commit = str(stamp.get("code_commit") or "")
     if not _COMMIT.match(commit) or stamp.get("code_dirty") is not False:
@@ -112,6 +167,10 @@ def _check_stamp(gid: str, stamp: Mapping[str, Any], git: GitView, protocol_sha2
         raise ConfigError(
             f"gate {gid}: evidence record commit {commit[:12]} does not exist in this repository"
         )
+    if git.is_repo and not git.is_ancestor(commit):
+        raise ConfigError(
+            f"gate {gid}: stale evidence: commit {commit[:12]} is not in the history of HEAD"
+        )
 
 
 def check_record_evidence(
@@ -120,6 +179,9 @@ def check_record_evidence(
     git: GitView,
     protocol_sha256: str,
     passed_evidence: Mapping[str, Path],
+    *,
+    repo_root: Path,
+    identity: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Re-validate a B2-B6 execution record used as PASSED evidence; return its body."""
     if path.suffix != ".json":
@@ -143,11 +205,20 @@ def check_record_evidence(
                 "B6": read_counts_record,
             }[gid]
             reader(path)
-    except (ProvenanceError, DataValidationError, KeyError, TypeError, ValueError) as exc:
+    except (
+        ProvenanceError,
+        DataValidationError,
+        KeyError,
+        TypeError,
+        ValueError,
+        AttributeError,
+    ) as exc:
         raise ConfigError(f"gate {gid}: evidence record invalid: {exc}") from exc
     if body.get("synthetic") is not False or body.get("data_class") != REAL_RESEARCH_DATA:
         raise ConfigError(f"gate {gid}: synthetic or unlabelled records can never close a gate")
     _check_stamp(gid, body["stamp"], git, protocol_sha256)
+    _check_config_fresh(gid, body["stamp"], repo_root)
+    _check_identity(gid, body, identity)
 
     def fp(g: str) -> str:
         if g not in passed_evidence:

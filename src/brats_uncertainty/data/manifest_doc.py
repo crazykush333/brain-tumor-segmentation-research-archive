@@ -37,7 +37,7 @@ from brats_uncertainty.data.schema import DatasetSchema
 from brats_uncertainty.errors import DataValidationError
 from brats_uncertainty.preprocessing.modalities import MODALITIES
 from brats_uncertainty.utils.hashing import sha256_file, sha256_json
-from brats_uncertainty.utils.paths import is_safe_relpath
+from brats_uncertainty.utils.paths import is_link, is_safe_relpath
 
 MANIFEST_DOC_SCHEMA_VERSION = 2
 FILE_TYPES = ("image", "label", "metadata", "other", "derived")
@@ -89,7 +89,7 @@ def _classify(case_id: str, name: str, schema: DatasetSchema) -> tuple[str, str 
 def _entry(
     root: Path, p: Path, case_id: str | None, ftype: str, modality: str | None
 ) -> dict[str, Any]:
-    if p.is_symlink():
+    if is_link(p):
         raise DataValidationError(f"symbolic links are not allowed in manifests: {p.name}")
     return {
         "case_id": case_id,
@@ -147,7 +147,7 @@ def build_raw_manifest(
     root = Path(data_root)
     files: list[dict[str, Any]] = []
     for p in root.rglob("*"):
-        if p.is_symlink():
+        if is_link(p):
             raise DataValidationError(f"symbolic links are not allowed in the data tree: {p.name}")
     for case_dir in sorted(p for p in root.iterdir() if p.is_dir()):
         cid = case_dir.name

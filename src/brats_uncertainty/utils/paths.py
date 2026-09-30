@@ -51,3 +51,22 @@ def is_safe_relpath(rel: str) -> bool:
         return False
     parts = rel.split("/")
     return all(p not in ("", ".", "..") for p in parts)
+
+
+def is_link(path: str | Path) -> bool:
+    """True for symbolic links (including broken ones) AND Windows directory junctions.
+
+    ``Path.is_symlink`` does not report junctions, which can also point outside a
+    permitted root; every link check in the data layer uses this function.
+    """
+    p = Path(path)
+    if p.is_symlink():
+        return True
+    isjunction = getattr(os.path, "isjunction", None)  # Python >= 3.12
+    if isjunction is not None:
+        return bool(isjunction(p))
+    try:  # Python 3.11 fallback: reparse-point attribute (Windows only)
+        attrs = getattr(os.lstat(p), "st_file_attributes", 0)
+    except OSError:
+        return False
+    return bool(attrs & 0x400)  # FILE_ATTRIBUTE_REPARSE_POINT
