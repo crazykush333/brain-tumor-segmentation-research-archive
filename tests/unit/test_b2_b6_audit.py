@@ -564,10 +564,24 @@ def _try_symlink(link: Path, target: Path) -> None:
     try:
         link.symlink_to(target)
     except (OSError, NotImplementedError):
-        pytest.skip("symbolic links not permitted on this system")
+        pytest.skip(
+            "OS file-symlink creation not permitted here (Windows without "
+            "SeCreateSymbolicLinkPrivilege/Developer Mode); runs on Linux CI. Same refusal "
+            "logic covered by test_file_link_entries_refused_on_every_platform and the "
+            "directory-junction tests in test_b2_b6_final_audit.py"
+        )
 
 
-def test_symlinks_are_refused(repo_root: Path, tmp_path: Path) -> None:
+# Link-safety coverage is split explicitly by link kind:
+#  1. test_file_symlinks_refused_posix: a real OS FILE symlink. Creating one needs
+#     SeCreateSymbolicLinkPrivilege / Developer Mode on Windows, so it is skipped on
+#     unprivileged Windows accounts and runs on Linux CI (.github/workflows/ci.yml).
+#  2. test_file_link_entries_refused_on_every_platform: the same refusal branches,
+#     driven through the shared ``is_link`` hook, on every OS.
+#  3. tests/unit/test_b2_b6_final_audit.py: real OS DIRECTORY links (symlink or
+#     Windows junction) for deliveries, data trees, synthetic trees, storage roots
+#     and write targets, which do run on Windows.
+def test_file_symlinks_refused_posix(repo_root: Path, tmp_path: Path) -> None:
     outside = tmp_path / "outside.bin"
     outside.write_bytes(b"outside")
     delivered = tmp_path / "delivered"
@@ -579,6 +593,54 @@ def test_symlinks_are_refused(repo_root: Path, tmp_path: Path) -> None:
     _try_symlink(ds.root / "metadata" / "link.csv", outside)
     with pytest.raises(ProvenanceError, match="symbolic links"):
         require_synthetic([ds.root / "metadata"], repo_root)
+
+
+def test_file_link_entries_refused_on_every_platform(
+    repo_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every refusal branch for a FILE link entry fires, independent of OS privileges."""
+    import brats_uncertainty.data.acquisition as acq
+    import brats_uncertainty.data.integrity as integ
+    import brats_uncertainty.data.manifest_doc as mdoc
+    import brats_uncertainty.data.records as recs
+    import brats_uncertainty.data.synthetic as syn
+    import brats_uncertainty.utils.io as uio
+    from brats_uncertainty.data.integrity import validate_dataset_tree
+    from brats_uncertainty.data.records import inventory
+
+    link_names = {"link.bin", "link.csv", "FAKE-001_t2.nii.gz", "target.json"}
+
+    def fake_is_link(p: object) -> bool:
+        return Path(str(p)).name in link_names
+
+    for mod in (acq, integ, mdoc, recs, syn, uio):
+        monkeypatch.setattr(mod, "is_link", fake_is_link)
+    delivered = tmp_path / "delivered"
+    delivered.mkdir()
+    (delivered / "ok.bin").write_bytes(b"ok")
+    (delivered / "link.bin").write_bytes(b"pretend link")
+    with pytest.raises(DataValidationError, match="symbolic links"):
+        LocalImportAdapter(fake_source(), delivered).plan()
+    with pytest.raises(ProvenanceError, match="symbolic link"):
+        inventory(delivered)
+    ds = generate_synthetic_dataset(tmp_path / "syn", repo_root=repo_root, n_cases=1)
+    (ds.root / "metadata" / "link.csv").write_bytes(b"pretend link")
+    with pytest.raises(ProvenanceError, match="symbolic links"):
+        require_synthetic([ds.root / "metadata"], repo_root)
+    case = tmp_path / "tree" / "FAKE-001"
+    case.mkdir(parents=True)
+    (case / "FAKE-001_t2.nii.gz").write_bytes(b"pretend link")
+    report = validate_dataset_tree(tmp_path / "tree", FAKE_SCHEMA)
+    assert any(i.code == "link" and i.path.endswith("_t2.nii.gz") for i in report.issues)
+    with pytest.raises(DataValidationError, match="symbolic links"):
+        mdoc.build_raw_manifest(
+            tmp_path / "tree",
+            FAKE_SCHEMA,
+            read_acquisition_record(build_and_get(make_status_repo(tmp_path / "r", closed=_b(2)))),
+            fake_stamp(),
+        )
+    with pytest.raises(FileExistsError, match="link"):
+        write_json(tmp_path / "target.json", {"x": 1}, overwrite=True)
 
 
 def test_real_storage_must_be_ignored_location(tmp_path: Path) -> None:

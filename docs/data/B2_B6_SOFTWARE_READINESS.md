@@ -1,183 +1,255 @@
-# B2–B6 software readiness (final adversarial audit)
+# B2–B6 software readiness: final sign-off
 
-| Field | Value |
-|---|---|
-| Date | 2026-09-30 |
-| Protocol | v1.0, FROZEN, tag `protocol-v1.0` (tag object `0f46a83` → commit `4ef7ef7`), unchanged |
-| Scope | Software only. No data were downloaded, acquired or processed. No real B2–B6, no B7, no split, no training, no analysis. |
-| Verdict | **SOFTWARE_READY_FOR_AUTHORIZED_EXECUTION** |
+**Result: SOFTWARE_B2_B6_READY**, meaning the software infrastructure is technically ready to execute *authorized* B2–B6 workflows. This is a statement about **software**, not about the study.
 
-**Definition.** SOFTWARE_READY_FOR_AUTHORIZED_EXECUTION means: *the software infrastructure is technically ready to execute authorized B2–B6 workflows, but no real-data execution has occurred.* Real-data execution remains blocked until B1 data-route authorization is actually obtained and recorded.
+**No scientific experiment step has been completed.** No real data have been acquired. B2–B6 have **not** been executed on real data. No real B3/B4 hash, B5 manifest or B6 count verification exists. Real-data execution remains **BLOCKED** pending B1 data-route authorization.
 
-## 1. Current gate status (observed from `docs/project_status.yaml`)
+## 1. Scope
 
-| Gate | Status |
-|---|---|
-| B1 | PENDING |
-| B2, B3, B4, B5, B6 | LOCKED |
-| B7–B12 | LOCKED |
-| Data | authorization PENDING, `acquired: false`, no approved route |
-| Training / evaluation | NOT_STARTED |
-| Results | UNAVAILABLE |
-| B6 counts | targets EXPECTED_BY_PROTOCOL (1,251 / 511 / 740); verification UNAVAILABLE |
+- **In scope:** final validation of the B2–B6 software infrastructure:
+  - acquisition layer and gate state machine;
+  - evidence and provenance records;
+  - hashing, manifests and B6 count logic;
+  - path, link and atomicity safety;
+  - repository hygiene, protocol and tag integrity;
+  - the website status display.
+- **Out of scope, and not done:**
+  - acquiring or downloading any data;
+  - real B2–B6 runs, B7, patient grouping, splits;
+  - training, evaluation or any scientific analysis.
 
-## 2. State-machine audit
+## 2. Protocol version
 
-- **Graph.** `B1 → B2 → {B3, B4} → B5 → B6 → B7 → … → B12`.
-- **Statuses.** LOCKED, PENDING (B1), AUTHORIZED, RUNNING, PASSED, FAILED, BLOCKED.
-- **Invariants** (validated on every load of the status file):
-  - a gate is LOCKED exactly while a prerequisite has not PASSED;
+`docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md`, **v1.0, FROZEN**, git tag `protocol-v1.0`. It was not modified. No amendment has been introduced.
+
+## 3. Software audit scope
+
+Reviewed together:
+
+- `data/`: `acquisition.py`, `stages.py`, `records.py`, `evidence.py`, `manifest_doc.py`, `integrity.py`, `synthetic.py`;
+- `evaluation/`: `lifecycle.py`, `transitions.py`, `status.py`, `guards.py`;
+- `utils/git.py`, `utils/paths.py`, `utils/io.py`;
+- `results/site_export.py`, the CLI;
+- tests: `test_b2_b6_software.py`, `test_b2_b6_audit.py`, `test_b2_b6_final_audit.py`, `test_data_gates.py`.
+
+## 4. State-machine audit
+
+- **Graph:** `B1 → B2 → {B3, B4} → B5 → B6 → B7 → … → B12`.
+- **B gate states:** LOCKED, PENDING (B1 only), AUTHORIZED, RUNNING, PASSED, FAILED, BLOCKED.
+- **Invariants, validated on every status load:**
+  - a gate is LOCKED exactly while one of its prerequisites has not PASSED;
   - PASSED follows protocol order.
-- **Rejected transitions (tested):**
-  - B1 PENDING→AUTHORIZED; B1 is authorized only by reaching PASSED with machine-checkable evidence;
+- **Rejected (tested):**
+  - B1 PENDING→AUTHORIZED; B1 can only be authorized by reaching PASSED with machine-checkable evidence;
   - B2 LOCKED→AUTHORIZED before B1;
   - LOCKED→PASSED; any skipped prerequisite;
   - B4 passing before B3; B7 before B6 has PASSED;
   - FAILED→PASSED, FAILED→AUTHORIZED, FAILED→RUNNING;
-  - FAILED/BLOCKED without evidence; unblocking without an owner-decision document.
-- **Transition writer.**
-  - It validates the current file first and applies the change.
-  - It re-validates everything, including evidence contents.
-  - It edits only the affected lines, and the re-parsed file must equal the validated mapping exactly.
-  - It writes atomically, and only with `--apply`.
+  - FAILED or BLOCKED without evidence; unblocking without an owner-decision document.
+- **Transition writer:**
+  - validates the current file before applying anything;
+  - fully re-validates the result, including evidence contents;
+  - edits only the affected lines, and the re-parsed file must equal the validated mapping exactly;
+  - writes atomically, and only with `--apply`.
 
-## 3. Evidence audit
+## 5. Evidence audit
 
-B1 PASSED requires `docs/data/B1_EVIDENCE_<date>.md` with exactly one `Evidence type:` (TCIA written confirmation or owner-approved alternative) and `Approved route:` equal to `data.approved_route`. Documentation, the inquiry and the template are rejected.
+- **B1:** `docs/data/B1_EVIDENCE_<date>.md` with exactly one `Evidence type:` and an `Approved route:` equal to `data.approved_route`. The B1 record, the inquiry and the template are rejected.
+- **B2–B6:** each gate needs its own execution record. The rejected cases below are tested:
 
-B2–B6 PASSED require the gate's own execution record, meeting all of these checks:
-
-| Check | Rejected case (tested) |
+| Requirement | Rejected (tested) |
 |---|---|
-| schema and fingerprint re-validated with the typed reader | hand-written minimal JSON; edited record |
-| record belongs to the gate | B4 record offered for B3 |
-| `data_class: REAL_RESEARCH_DATA` and `synthetic: false` | genuine synthetic record; relabelled synthetic record |
-| clean committed checkout | `code_dirty: true`; missing commit |
-| frozen protocol version and hash | protocol `v0.5`; other protocol hash |
-| commit exists and is an ancestor of HEAD | unknown commit; commit from a rewritten or orphan history |
-| hashed configuration files still unchanged | configuration edited or deleted after the record |
-| dataset identity: name and DOI from `configs/dataset/brats2021.yaml` `evidence_identity` | other dataset name; other DOI |
-| official source (TCIA / Synapse prefixes) | mirror URL |
-| committed or staged, not git-ignored, safe in-repo path | untracked file; git-ignored file even if force-added; `../`, absolute or drive paths |
-| cross-gate links: B5 → B2/B3/B4 fingerprints; B6 → B3 fingerprint and crosswalk SHA-256; B6 status VERIFIED_FROM_SOURCE | unlinked B5; B6 with another crosswalk hash; failed B6 record |
+| schema and fingerprint re-validated by the typed reader | hand-written JSON; edited record; non-object JSON |
+| record belongs to the gate | another gate's record |
+| `data_class: REAL_RESEARCH_DATA`, `synthetic: false` | synthetic or relabelled records |
+| clean committed checkout; commit exists and is an ancestor of HEAD | dirty tree; unknown commit; commit from a rewritten/orphan history |
+| frozen protocol version and hash | `v0.5`; other hash |
+| hashed configuration unchanged (staleness) | configuration edited or removed after the record |
+| dataset identity (name, DOI) from `configs/dataset/brats2021.yaml` `evidence_identity`; official source | another dataset or DOI; mirror URL |
+| committed or staged, not git-ignored, safe in-repo path | untracked; git-ignored (even if force-added); traversal, absolute or drive paths |
+| links: B5 → B2/B3/B4 fingerprints; B6 → B3 fingerprint and crosswalk SHA-256; B6 `VERIFIED_FROM_SOURCE` | unlinked B5; B6 with another crosswalk hash; failed B6 |
 
-Residual limitation: fingerprints are not cryptographically keyed. A deliberate forger with write access and a real commit could fabricate a consistent record. The controls stop accidental, stale, synthetic and mismatched evidence; they do not stop intentional fraud. Git history and review cover that.
+## 6. Acquisition safety
 
-## 4. Acquisition audit
-
-- **Dry run is the default.** `acquire` without `--execute` only prints the plan; no network, no disk.
-- **Real execution needs all of:**
+- **Dry run is the default.** Without `--execute`, `acquire` only returns a plan: no network, no disk writes.
+- **Real acquisition fails closed** unless all of these hold:
   - B1 PASSED;
   - B2 AUTHORIZED/RUNNING;
   - `data.authorization: APPROVED`;
   - adapter route equal to `data.approved_route`;
-  - a default clock (no fabricated timestamps);
-  - a storage root that is not a link and, inside the repository, only under the git-ignored `data/`;
-  - an empty storage root.
+  - default clock;
+  - storage root that is not a link, is empty and, inside the repository, only under the git-ignored `data/`.
+- **The gate is enforced inside every real adapter's `execute()`**, so calling an adapter directly also fails with "Real-data acquisition is locked…" (fixed and tested in this pass).
+- **Hidden-downloader scan (all tracked files):**
 
-  Otherwise it fails with "Real-data acquisition is locked because B1 data-route authorization has not been recorded."
-- **No synthetic data through real adapters.** SYNTHETIC_TEST_DATA cannot be delivered through the real `local-import` adapter, and a marker appearing in real storage aborts the run.
-- **Repository-wide search.**
-  - `urllib.request.urlopen` in `data/acquisition.py` is the single network call. It is reachable only via `stage_acquire(execute=True)` after the checks above.
-  - No `requests`, Kaggle API, boto/cloud uploads, wget/curl, `shell=True` or `os.system`.
-  - The data and evaluation packages contain no `subprocess` and read no environment variables.
-  - No notebooks.
-  - The website and scripts contain no fetch or download calls.
-  - The CLI has no force, skip, bypass or override options, and stage functions have no such parameters.
+| Reference | Classification |
+|---|---|
+| `urllib.request.urlopen` in `data/acquisition.py` | gated acquisition infrastructure (`HttpsFileAdapter`, only after the gate) |
+| `subprocess` in `scripts/experiments/train.py` | gated (`train_main`: B1–B12, D1–D6) nnU-Net launch; dry run unless `--execute`; not a downloader |
+| `subprocess` in `utils/git.py` | read-only git queries (rev-parse, ls-files, check-ignore, merge-base, cat-file) |
+| `subprocess`/git in tests | test-only |
+| URLs and download words in `docs/` | documentation |
+| `pip install` / `npm ci` in CI workflows | dependency installation, no study data |
 
-## 5. Synthetic/real audit
+- **Not found anywhere:** `requests`, Kaggle API, boto/GCS/Azure SDKs, wget/curl commands, `shell=True`, `os.system`, notebooks. The data and evaluation packages read no environment variables. The CLI has no force, skip, bypass or override options.
+
+## 7. Synthetic/real isolation
 
 - Every record and manifest carries an explicit `data_class`. Relabelling breaks the fingerprint.
-- Synthetic mode accepts only unmodified files listed with their SHA-256 in the tree's `SYNTHETIC_TEST_DATA.json` marker, outside the repository.
-- Tested rejections:
+- Synthetic mode accepts only unmodified files listed with their SHA-256 in a `SYNTHETIC_TEST_DATA.json` marker, outside the repository.
+- **Rejected (tested):**
   - marker removed;
   - marker copied next to an unrelated real-looking file;
   - marker label edited;
   - modified synthetic file;
   - synthetic input in real mode;
-  - synthetic tree through the real adapter.
-- A synthetic B6 success is `SYNTHETIC_TEST_ONLY`, never `VERIFIED_FROM_SOURCE`.
+  - synthetic tree through the real `local-import` adapter;
+  - a marker appearing in real storage.
+- A synthetic B6 success is `SYNTHETIC_TEST_ONLY` and can never close a gate.
 
-## 6. Manifest audit (B5)
+## 8. Hash integrity
 
-- **Pipeline tested end to end:** synthetic source → inventory → hashes → provenance → schema validation → manifest → manifest hash → reload.
-- Two independent runs over identical bytes gave identical files, ordering, duplicates and `manifest_sha256`.
-- **Hashing order.** The hash is computed after all final fields, including `gate` and `integrity`; any later change fails validation.
-- **Metadata links.** Real B5 requires the B3/B4 records; a metadata file changed after hashing is rejected.
-- **Raw vs derived.** Derived manifests link to their parent hash.
+SHA-256 is computed over exact file bytes:
+
+- same bytes give the same hash;
+- changing one byte gives a different hash;
+- a renamed copy has the same content hash;
+- a missing file raises "input not found";
+- a wrong file raises "requires the file".
+
+Malformed values such as `TODO-hash` are rejected by record validation. **No real B3/B4 hash exists** in the repository. Placeholder-shaped values appear only in tests and temporary fake repositories.
+
+## 9. Manifest integrity
+
+- **Tested end to end:** synthetic source → inventory → hashes → provenance → schema validation → manifest → `manifest_sha256` → reload.
+- **Deterministic:** two independent runs over identical bytes gave identical files, ordering, duplicates and hash.
+- **Hash computed last:** after all final fields, including `gate`, `integrity` and `metadata_records`; any later change fails validation.
+- **Metadata links:** real B5 requires the B3/B4 records, and metadata changed after hashing is rejected.
+- **Raw vs derived:** derived manifests link to their parent hash.
 - **Rejected:** empty and partial manifests, duplicate paths or slots, unsafe paths.
 
-## 7. Hashing audit (B3/B4)
+## 10. B6 verification logic
 
-- SHA-256 is computed over exact file bytes:
-  - same bytes give the same hash;
-  - changing one byte gives a different hash;
-  - a renamed copy has the same content hash;
-  - a missing file fails with "input not found";
-  - a wrong file fails with "requires the file".
-- No real B3/B4 hash exists in the repository.
-- Records reject malformed hashes such as `TODO-hash`.
-- Placeholder-shaped values appear only in tests and temporary fake repositories.
-
-## 8. B6 verification audit
-
-| State | When | Tested |
+| State | Meaning | Tested |
 |---|---|---|
-| EXPECTED_BY_PROTOCOL | protocol targets; always displayed as "Protocol verification targets" | yes |
-| UNAVAILABLE | B6 has not produced a result (current state; also B6 AUTHORIZED) | yes |
-| VERIFIED_FROM_SOURCE | only from a PASSED B6 whose REAL_RESEARCH_DATA record verified the counts derived from the hashed crosswalk | yes (fake repository) |
-| FAILED_VERIFICATION | wrong counts, or crosswalk ≠ B3 hash (record written with diagnostics, run stops per SR3) | yes |
+| EXPECTED_BY_PROTOCOL | the protocol targets 1,251 / 511 / 740, always shown as "Protocol verification targets" | yes |
+| UNAVAILABLE | no source processed (current state; also when B6 is AUTHORIZED but not run) | yes |
+| VERIFIED_FROM_SOURCE | only a PASSED B6 whose REAL_RESEARCH_DATA record derived the counts from the hashed crosswalk | yes (fake repository) |
+| FAILED_VERIFICATION | wrong counts or crosswalk ≠ B3 hash (record with diagnostics; stop per SR3) | yes |
 | SYNTHETIC_TEST_ONLY | synthetic source matching the targets (software test only) | yes |
 
-The protocol targets alone can never produce VERIFIED_FROM_SOURCE. The record validator, the evidence validator and the display layer each refuse it.
+The targets alone can never yield VERIFIED_FROM_SOURCE. The counts record validator, the evidence validator and the display layer each refuse it.
 
-## 9. Atomicity and path-safety audit
+## 11. Path and link safety
+
+- **Links refused everywhere:** `is_link` detects symbolic links (including broken ones) and Windows directory junctions. It is used for deliveries, storage inventories, data trees, synthetic trees, stage inputs, storage roots and write targets.
+- **Integrity audit:** reports links as errors without following them.
+- **Relative paths:** one platform-independent rule rejects `/abs`, `\abs`, `C:/`, `..`, `.` and backslashes on every OS.
+- **Write targets** that are existing files, directories, links or broken links are refused.
+- **Tested with real OS links on this Windows machine** using directory junctions.
+
+## 12. Atomicity
 
 - **Atomic writes:**
-  - JSON writes use temp file plus `os.replace`;
-  - the status file is written atomically, with the `.part` file cleaned up;
-  - the manifest CSV and acquisition copies go through `.part` then rename.
-- **Simulated failures leave nothing behind:** after a failure the previous status is intact and valid, and no `.part` or partial JSON/CSV files remain (tested).
-- **Refused destinations:** a destination that exists, is a directory, is a link, or is a broken link.
-- **Links:** symbolic links and Windows directory junctions (`is_link`) are refused in deliveries, storage, data trees, synthetic trees and stage inputs. The integrity audit reports links as errors and does not follow them.
-- **Relative paths:** checked by one platform-independent rule; `/abs`, `C:/`, `..` and backslashes are rejected on every OS.
-- **Where it was tested:** the link tests ran on this Windows machine using junctions. One older POSIX-symlink test is skipped here because symlink creation needs privileges; it runs on Linux CI.
+  - JSON: temp file plus `os.replace`;
+  - status file: `.part` plus `os.replace`, with the `.part` always removed;
+  - manifest CSV and acquisition copies: `.part` then rename.
+- **Simulated interruptions (tested):**
+  - the previous status file stays byte-identical and valid;
+  - no `.part`, partial JSON or partial CSV remains;
+  - status never changes without validated evidence.
 
-## 10. Defects found and fixed in this final pass
+## 13. Test results
 
-1. `GitView.ignored` used text-mode stdin, so on Windows git received `path\r` and never matched. Git-ignored evidence would have been accepted on Windows. Fixed with NUL-separated binary I/O (`-z`); regression test uses a real temporary git repository.
-2. Evidence identity (dataset, DOI, official source) was not checked. Now enforced.
-3. Stale configuration (hashed configs changed afterwards) was not detected. Now enforced.
-4. Commits from a foreign or rewritten history were accepted. They must now be ancestors of HEAD.
-5. Windows directory junctions were not recognised as links. `is_link` is now used everywhere.
-6. The write helper could replace a link or broken link, and gave an unclear error for directories. It now refuses both.
-7. Failed transition and CSV writes could leave `.part` files. They are now cleaned up.
-8. Synthetic trees could be offered through the real adapter. Now refused.
-9. There was no explicit UNAVAILABLE B6 state; `count_verification_state` now derives it from status and evidence only.
-10. Non-object JSON records raised AttributeError. They now raise a clear ProvenanceError.
-
-The earlier audit's fixes (evidence re-validation, B1 evidence format, FAILED/BLOCKED rules, B5 linkage, data_class, transition writer, relative-path rule, and more) remain in force and are covered by tests.
-
-## 11. Validation (observed)
+From the final run on 2026-09-30:
 
 | Check | Result |
 |---|---|
-| `pytest` | **275 passed, 1 skipped** (POSIX symlink creation not permitted on this Windows account; the junction equivalent ran) |
-| `ruff check .` / `ruff format --check .` | clean / 165 files formatted |
-| `mypy` (configured scope: `src`, strict defs) | no issues in 72 files |
-| package build / imports | sdist and wheel built; all 71 package modules import (`nnunet_trainers` without torch/nnunet) |
-| `brats-uncertainty check-repo` | pass: prohibited types, magic-byte sniffing (NIfTI/DICOM/gzip/ZIP), credentials, personal paths, look-alike protocol files |
-| tracked-file inspection | no imaging, arrays, checkpoints, archives, spreadsheets, credentials, split files, result JSON or ledgers; 0 tracked CSV; no gzip/ZIP magic in any tracked file |
-| protocol integrity | `git show protocol-v1.0:<file>` and `git show HEAD:<file>` are byte-identical (`cmp`); working copy equals the tag blob after CRLF→LF (Windows checkout); SHA-256 `704c0b49…d9811` |
-| tag integrity | `protocol-v1.0` → tag object `0f46a83` → commit `4ef7ef7`; not moved, no retag |
-| website `tsc` and `next build` | pass; overview renders Protocol ✓ Frozen, B1 ⏳ Pending, B2–B7 🔒 Locked, Training ○ Not started, Results ○ Not available; counts only as "Protocol verification target"; B6 verification UNAVAILABLE |
+| pytest | **277 passed, 0 failed, 1 skipped** |
+| `ruff check .` | PASS |
+| `ruff format --check .` | PASS (165 files) |
+| `mypy` (configured: `files = ["src"]`, strict defs) | PASS (72 files) |
+| package build + import | PASS (sdist and wheel; 71/71 modules import) |
+| website production build | PASS |
+| `brats-uncertainty check-repo` | PASS |
 
-## 12. Remaining risks
+## 14. Skipped-test explanation
 
-1. Unkeyed fingerprints; deliberate fraud is out of scope (see §3).
-2. PASSED is terminal. Invalidating a passed gate (SR5) requires a logged administrative entry and a validated manual status edit.
-3. Changing `configs/dataset/brats2021.yaml` after B5/B6 evidence exists invalidates that evidence by design. Set `expected_shape` and confirm the crosswalk headers before running B5/B6.
-4. The TCIA challenge download requires IBM Aspera Connect. Its compatibility with a runtime-only route is unconfirmed (part of the TCIA inquiry).
-5. The nnU-Net trainer glue is an unverified template (separate D1/M1 concern).
+- **Skipped test:** `tests/unit/test_b2_b6_audit.py::test_file_symlinks_refused_posix`.
+- **Why:** it creates a real OS **file** symbolic link. On Windows that requires SeCreateSymbolicLinkPrivilege or Developer Mode, which this account lacks, so `symlink_to` raises and the test skips with an explicit reason. It runs on Linux CI (`.github/workflows/ci.yml`, ubuntu-latest).
+- **Equivalent coverage of the same safety property** (link entries are refused and never followed), both of which ran here:
+  - `test_file_link_entries_refused_on_every_platform` drives every file-level refusal branch through the shared `is_link` hook, on every OS: delivery plan, storage inventory, synthetic tree, integrity audit, raw manifest and write target.
+  - `test_b2_b6_final_audit.py` creates real OS **directory** links (Windows junctions here, symlinks on POSIX) and verifies refusal for deliveries, data trees, synthetic trees, storage roots, write targets and broken links.
+- **Verdict: PASS.** Equivalent coverage exists. The only part not executed on this machine is the OS primitive that reports a file symlink (`Path.is_symlink`, standard library), which the POSIX run covers.
 
-Next authorized step: obtain and record written data-route confirmation (or an owner-approved alternative) before B2 data acquisition.
+## 15. Repository scan
+
+Tracked files were checked directly, and the working tree including ignored paths was also scanned. Findings:
+
+- no imaging (NIfTI, DICOM, NRRD, MHA), arrays, checkpoints or weights;
+- no archives or spreadsheets, and no gzip, ZIP, NIfTI or DICOM magic bytes in any tracked file;
+- no CSV files;
+- no patient-level ID lists;
+- no split, result files or evaluation ledger;
+- no credentials, tokens, private keys, `.env` or `kaggle.json`;
+- no leftover `.part` files;
+- `data/` contains only its README.
+
+Synthetic fixtures are generated at test time in temporary directories (`tests/fixtures/`), never committed as data.
+
+## 16. Protocol integrity
+
+| | SHA-256 | Bytes |
+|---|---|---|
+| working tree `docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md` | `704c0b495917344f44b93e7548ade0e32a71220265419516a2c83d626fcd9811` | 69,163 |
+| `git show protocol-v1.0:docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md` | `704c0b495917344f44b93e7548ade0e32a71220265419516a2c83d626fcd9811` | 69,163 |
+
+**Byte-for-byte identical (`cmp`).**
+
+Note: at the start of this pass the Windows working copy carried CRLF line endings (69,790 bytes). That came from the original `core.autocrlf` checkout, before `.gitattributes` set `eol=lf`. Git reported no change. With the owner's approval, the working copy was re-checked out from git. There was no commit and no content change; git status stayed clean.
+
+## 17. Tag integrity
+
+- `protocol-v1.0` = annotated tag object `0f46a8323cebab0a92d06a31885ae6b47924d361`, pointing to commit `4ef7ef707abafce4314884c6f271969b5bfbec32` (the freeze commit).
+- The tag commit is an ancestor of HEAD, and no later commit touched the protocol file.
+- No move, retag or history rewrite.
+
+## 18. Website build
+
+- The production static export passes.
+- The stage overview renders:
+  - Protocol v1.0 ✓ Frozen;
+  - Data-route documentation ✓ Prepared;
+  - B1 ⏳ Pending;
+  - B2, B3, B4, B5, B6, B7 and Final split 🔒 Locked;
+  - Training ○ Not started; Evaluation ○ Not started; Results ○ Not available.
+- The targets 1,251 / 511 / 740 appear only as "Protocol verification target". "Verified dataset counts" and "Verified results" appear nowhere.
+- B6 verification shows UNAVAILABLE. No empirical result appears.
+
+## 19. Current gate state (`docs/project_status.yaml`)
+
+| Item | State |
+|---|---|
+| Protocol | v1.0, FROZEN |
+| Data | authorization PENDING; acquired false; approved route none |
+| B1 | PENDING (no `B1_EVIDENCE_<date>.md` exists; TCIA inquiry prepared, not sent) |
+| B2–B12 | LOCKED |
+| Training | NOT_STARTED |
+| Evaluation | internal NOT_STARTED, external NOT_STARTED |
+| Results | UNAVAILABLE |
+
+## 20. Known limitations
+
+1. **Unkeyed fingerprints.** They detect accidental, stale, synthetic and mismatched evidence, not deliberate fraud by someone with write access and a real commit. Git history and review are the control.
+2. **Private methods can be called in Python.** Adapter `_materialize` methods are not blocked by the language. All public interfaces (CLI, scripts, `stage_acquire`, `adapter.execute`) are gated.
+3. **PASSED is terminal.** Invalidating a passed gate (SR5) requires a logged administrative entry and a validated manual status edit.
+4. **Config edits invalidate evidence.** Changing `configs/dataset/brats2021.yaml` after B5/B6 evidence exists makes that evidence stale by design. Finalize `expected_shape` and confirm the crosswalk headers before B5/B6.
+5. **Aspera compatibility unconfirmed.** The TCIA challenge download requires IBM Aspera Connect; whether it works with a runtime-only route is part of the TCIA inquiry.
+6. **nnU-Net trainer template.** The trainer glue is still an unverified template (a D1/M1 concern, outside B2–B6).
+7. **File-symlink primitive untested here.** OS file-symlink detection is exercised only on Linux CI (see §14).
+
+---
+
+Software B2–B6 infrastructure is READY for authorized execution. Real-data execution remains BLOCKED pending B1 data-route authorization.
+
+Next authorized step: obtain and record B1 data-route authorization. After B1 is genuinely authorized, execute B2–B6 real-data verification as a separate controlled stage.

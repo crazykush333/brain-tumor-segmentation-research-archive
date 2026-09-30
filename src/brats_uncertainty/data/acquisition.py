@@ -106,9 +106,19 @@ class AcquisitionAdapter(ABC):
     @abstractmethod
     def plan(self) -> AcquisitionPlan: ...
 
+    def execute(self, storage_root: Path, *, repo_root: Path) -> None:
+        """Materialize the planned files under ``storage_root``.
+
+        Real adapters re-check the B1/B2 authorization HERE, so calling ``execute``
+        directly (outside ``stage_acquire``) cannot bypass the research gate.
+        """
+        if not self.synthetic:
+            assert_real_acquisition_authorized(repo_root, self)
+        self._materialize(storage_root)
+
     @abstractmethod
-    def execute(self, storage_root: Path) -> None:
-        """Materialize the planned files under ``storage_root`` (only via ``stage_acquire``)."""
+    def _materialize(self, storage_root: Path) -> None:
+        """Adapter-specific transfer; never call directly (use ``execute``/``stage_acquire``)."""
 
 
 class LocalImportAdapter(AcquisitionAdapter):
@@ -147,7 +157,7 @@ class LocalImportAdapter(AcquisitionAdapter):
         )
         return AcquisitionPlan(self.name, self.source, False, items)
 
-    def execute(self, storage_root: Path) -> None:
+    def _materialize(self, storage_root: Path) -> None:
         for p in self._files():
             dest = storage_root / self._rel(p)
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -193,7 +203,7 @@ class HttpsFileAdapter(AcquisitionAdapter):
         items = tuple(PlannedItem(rel, redact_url(u)) for rel, u in sorted(self.urls.items()))
         return AcquisitionPlan(self.name, self.source, False, items)
 
-    def execute(self, storage_root: Path) -> None:
+    def _materialize(self, storage_root: Path) -> None:
         for rel, url in sorted(self.urls.items()):
             dest = storage_root / rel
             if dest.exists():
@@ -239,7 +249,7 @@ class SyntheticFixtureAdapter(AcquisitionAdapter):
             self.name, self.source, True, items, ("SYNTHETIC_TEST_DATA - not BraTS",)
         )
 
-    def execute(self, storage_root: Path) -> None:
+    def _materialize(self, storage_root: Path) -> None:
         self.generated = generate_synthetic_dataset(
             storage_root,
             repo_root=self.repo_root,
@@ -319,7 +329,7 @@ def stage_acquire(
     else:
         label = _storage_label(storage_root, repo_root, storage_label)
         storage_root.mkdir(parents=True, exist_ok=True)
-    adapter.execute(storage_root)
+    adapter.execute(storage_root, repo_root=repo_root)
     if adapter.synthetic:
         require_synthetic([storage_root], repo_root)
     inv = inventory(storage_root)

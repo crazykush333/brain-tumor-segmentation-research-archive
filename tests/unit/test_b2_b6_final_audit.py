@@ -698,3 +698,33 @@ def test_record_constructor_hash_shape_is_validated() -> None:
         )["data_class"]
         == "REAL_RESEARCH_DATA"
     )
+
+
+def test_adapters_cannot_be_executed_directly_without_authorization(
+    repo_root: Path, tmp_path: Path
+) -> None:
+    """Calling adapter.execute() outside stage_acquire still enforces the B1/B2 gate."""
+    from brats_uncertainty.data.acquisition import HttpsFileAdapter
+    from brats_uncertainty.errors import ResearchGateError
+
+    calls: list[str] = []
+
+    def opener(url: str):  # type: ignore[no-untyped-def]
+        calls.append(url)
+        raise AssertionError("network must not be reached")
+
+    delivered = tmp_path / "d.bin"
+    delivered.write_bytes(b"x")
+    for adapter in (
+        HttpsFileAdapter(fake_source(), {"m.csv": "https://fake.invalid/m.csv"}, opener=opener),
+        LocalImportAdapter(fake_source(), delivered),
+    ):
+        with pytest.raises(ResearchGateError, match="Real-data acquisition is locked"):
+            adapter.execute(tmp_path / "store", repo_root=repo_root)
+    assert calls == []
+    assert not (tmp_path / "store").exists()
+    # the synthetic adapter needs no authorization but still cannot write into the repository
+    with pytest.raises(ProvenanceError, match="outside the repository"):
+        SyntheticFixtureAdapter(repo_root).execute(
+            repo_root / "data" / "raw" / "x", repo_root=repo_root
+        )
