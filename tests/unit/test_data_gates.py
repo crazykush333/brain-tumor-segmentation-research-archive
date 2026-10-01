@@ -95,7 +95,9 @@ def test_integrity_issue_detection(tmp_path: Path) -> None:
     target.write_bytes(target.read_bytes()[:20])  # corrupt
     (root / "SYN-004" / "notes.txt").write_text("x", encoding="utf-8")  # unexpected in case
     (root / "readme.txt").write_text("x", encoding="utf-8")  # unexpected top level
-    (root / "bad_case").mkdir()  # invalid case ID
+    (root / "bad_case").mkdir()  # not a case ID and holds no cases: empty collection
+    (root / "bad case 2").mkdir()  # data files under an invalid case name
+    (root / "bad case 2" / ("x" + SCHEMA.file_ending)).write_bytes(b"x")
     r = validate_dataset_tree(
         root, SCHEMA, expected_case_ids=["SYN-000", "SYN-001", "SYN-002", "SYN-003", "SYN-009"]
     )
@@ -106,7 +108,8 @@ def test_integrity_issue_detection(tmp_path: Path) -> None:
         "dimension_mismatch",
         "corrupt_file",
         "unexpected_file",
-        "invalid_case_id",
+        "empty_collection",
+        "malformed_case_dir",
         "missing_case",
         "unexpected_case",
     } <= codes

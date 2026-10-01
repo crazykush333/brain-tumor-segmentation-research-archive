@@ -73,8 +73,13 @@ def generate_synthetic_dataset(
     n_cases: int = 3,
     crosswalk_counts: tuple[int, int] = (2, 1),
     shape: tuple[int, ...] = (4, 4, 3),
+    collections: tuple[str, ...] | None = None,
 ) -> SyntheticDataset:
     """Generate a SYNTHETIC_TEST_DATA tree outside the repository.
+
+    With ``collections`` the cases are spread round-robin over
+    ``images/<collection>/<case_id>/`` (the official nested TCIA layout);
+    otherwise ``images/<case_id>/``.
 
     ``crosswalk_counts`` = (number of site-1 rows, number of other-site rows)
     in the synthetic crosswalk. It is independent of ``n_cases`` so that the
@@ -88,9 +93,10 @@ def generate_synthetic_dataset(
         raise ProvenanceError(f"destination is not empty: {root}")
     images = root / "images"
     case_ids = tuple(f"SYN-{i:04d}" for i in range(n_cases))
-    for cid in case_ids:
+    for i, cid in enumerate(case_ids):
+        case_dir = images / collections[i % len(collections)] / cid if collections else images / cid
         for suffix in (*SYNTHETIC_MODALITY_SUFFIXES.values(), SYNTHETIC_LABEL_SUFFIX):
-            write_nifti_header_file(images / cid / f"{cid}{suffix}.nii.gz", shape)
+            write_nifti_header_file(case_dir / f"{cid}{suffix}.nii.gz", shape)
     crosswalk = root / "metadata" / "BraTS2021_MappingToTCIA.xlsx"
     _write_synthetic_crosswalk(crosswalk, *crosswalk_counts)
     ucsf = root / "metadata" / "UCSF-PDGM-metadata_v5.csv"

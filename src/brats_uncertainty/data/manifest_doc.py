@@ -9,6 +9,13 @@ the JSON Schemas in ``configs/schemas/``:
   manifest, linked to the parent ``manifest_sha256`` and the derivation
   tool/configuration.
 
+Schema version 3 supports the official nested TCIA delivery
+(``<collection>/<case_id>/``): every file records its ``collection`` and its
+path relative to the data root, the derived ``cases`` table maps each case to
+its collection and ``relative_case_path``, and ``source_layout`` records the
+detected layout, the per-collection case counts and where the data root lies
+inside the B2 delivery (``data_root_reference``). Nothing is flattened.
+
 ``manifest_sha256`` is the SHA-256 of the canonical JSON of the manifest
 content without its provenance stamp, so it depends only on the data and the
 source description. Manifests of real data are private research artifacts
@@ -25,6 +32,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from brats_uncertainty.data.layout import LAYOUTS, case_relpath, discover_cases
 from brats_uncertainty.data.manifest import FileRecord, Manifest, ManifestEntry, validate_manifest
 from brats_uncertainty.data.records import (
     AcquisitionRecord,
@@ -39,9 +47,18 @@ from brats_uncertainty.preprocessing.modalities import MODALITIES
 from brats_uncertainty.utils.hashing import sha256_file, sha256_json
 from brats_uncertainty.utils.paths import is_link, is_safe_relpath
 
-MANIFEST_DOC_SCHEMA_VERSION = 2
+MANIFEST_DOC_SCHEMA_VERSION = 3
 FILE_TYPES = ("image", "label", "metadata", "other", "derived")
-CSV_COLUMNS = ("case_id", "file_type", "modality", "filename", "relpath", "size_bytes", "sha256")
+CSV_COLUMNS = (
+    "collection",
+    "case_id",
+    "file_type",
+    "modality",
+    "filename",
+    "relpath",
+    "size_bytes",
+    "sha256",
+)
 
 RAW_REQUIRED = (
     "manifest_type",
@@ -54,6 +71,8 @@ RAW_REQUIRED = (
     "source_url",
     "acquisition",
     "metadata_records",
+    "source_layout",
+    "cases",
     "files",
     "summary",
     "duplicates",
@@ -87,11 +106,17 @@ def _classify(case_id: str, name: str, schema: DatasetSchema) -> tuple[str, str 
 
 
 def _entry(
-    root: Path, p: Path, case_id: str | None, ftype: str, modality: str | None
+    root: Path,
+    p: Path,
+    case_id: str | None,
+    ftype: str,
+    modality: str | None,
+    collection: str | None = None,
 ) -> dict[str, Any]:
     if is_link(p):
         raise DataValidationError(f"symbolic links are not allowed in manifests: {p.name}")
     return {
+        "collection": collection,
         "case_id": case_id,
         "file_type": ftype,
         "modality": modality,
@@ -119,6 +144,46 @@ def _summary(files: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+def _cases(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Case table derived from the image/label entries (collection, case path, files)."""
+    cases: dict[tuple[str | None, str], dict[str, Any]] = {}
+    for f in files:
+        if not f["case_id"] or f["file_type"] not in ("image", "label"):
+            continue
+        key = (f["collection"], str(f["case_id"]))
+        c = cases.setdefault(
+            key,
+            {
+                "collection": f["collection"],
+                "case_id": f["case_id"],
+                "relative_case_path": case_relpath(f["collection"], str(f["case_id"])),
+                "modalities": {},
+                "label": None,
+                "n_files": 0,
+                "total_bytes": 0,
+            },
+        )
+        if f["file_type"] == "label":
+            c["label"] = f["relpath"]
+        else:
+            c["modalities"][f["modality"]] = f["relpath"]
+        c["n_files"] += 1
+        c["total_bytes"] += int(f["size_bytes"])
+    out = []
+    for c in sorted(cases.values(), key=lambda c: str(c["relative_case_path"])):
+        c["modalities"] = dict(sorted(c["modalities"].items()))
+        out.append(c)
+    return out
+
+
+def _collection_counts(cases: list[dict[str, Any]]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for c in cases:
+        if c["collection"] is not None:
+            out[c["collection"]] = out.get(c["collection"], 0) + 1
+    return dict(sorted(out.items()))
+
+
 def _finish(doc: dict[str, Any]) -> dict[str, Any]:
     doc["manifest_sha256"] = content_sha256(doc)
     validate_manifest_doc(doc)
@@ -137,28 +202,42 @@ def build_raw_manifest(
     *,
     metadata: list[tuple[Path, MetadataFileRecord]] | None = None,
     extra: dict[str, Any] | None = None,
+    data_root_reference: str | None = None,
 ) -> dict[str, Any]:
-    """Raw manifest of ``data_root/<case_id>/...`` plus metadata files with their B3/B4 records.
+    """Raw manifest of ``data_root/[<collection>/]<case_id>/...`` plus B3/B4 metadata files.
+
+    The tree is discovered with ``data.layout`` (flat or nested-collection) and
+    is never flattened: relpaths are relative to ``data_root`` and keep the
+    collection directory. Any layout error fails closed. ``data_root_reference``
+    is the data root's path inside the B2 delivery (logical, never absolute).
 
     Each metadata file must still hash to the value in its B3/B4 record (a file
     changed after hashing invalidates the manifest), and each record's data
     class must match the acquisition.
     """
     root = Path(data_root)
+    if data_root_reference is not None and not is_safe_relpath(data_root_reference):
+        raise DataValidationError("data_root_reference must be a safe relative path")
     files: list[dict[str, Any]] = []
     for p in root.rglob("*"):
         if is_link(p):
             raise DataValidationError(f"symbolic links are not allowed in the data tree: {p.name}")
-    for case_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-        cid = case_dir.name
-        if not schema.is_valid_case_id(cid):
-            raise DataValidationError(f"invalid case ID for {schema.name}: {cid!r}")
-        for p in sorted(x for x in case_dir.rglob("*") if x.is_file()):
-            ftype, modality = _classify(cid, p.name, schema)
-            files.append(_entry(root, p, cid, ftype, modality))
-    for p in sorted(root.iterdir()):
-        if p.is_file():
-            files.append(_entry(root, p, None, "other", None))
+    found = discover_cases(root, schema)
+    if found.errors:
+        e = found.errors[0]
+        raise DataValidationError(
+            f"data tree layout invalid ({len(found.errors)} error(s)); first: {e.code} {e.path}"
+        )
+    for case in found.cases:
+        children = sorted(case.path.iterdir(), key=lambda x: x.name)
+        nested = [x.name for x in children if x.is_dir()]
+        if nested:
+            raise DataValidationError(f"{case.relpath}: subdirectories inside a case: {nested}")
+        for p in children:
+            ftype, modality = _classify(case.case_id, p.name, schema)
+            files.append(_entry(root, p, case.case_id, ftype, modality, case.collection))
+    for collection, p in found.stray_files:
+        files.append(_entry(root, p, None, "other", None, collection))
     metadata_records: dict[str, dict[str, str]] = {}
     for m, rec in metadata or []:
         if rec.synthetic != acquisition.synthetic:
@@ -195,6 +274,12 @@ def build_raw_manifest(
             "route": acquisition.source.route,
         },
         "metadata_records": dict(sorted(metadata_records.items())),
+        "source_layout": {
+            "layout": found.layout,
+            "collections": found.collections,
+            "data_root_reference": data_root_reference,
+        },
+        "cases": _cases(files),
         "files": files,
         "summary": _summary(files),
         "duplicates": _duplicates(files),
@@ -295,8 +380,48 @@ def validate_manifest_doc(doc: dict[str, Any]) -> None:
         raise DataValidationError("manifest summary inconsistent with files")
     if doc["duplicates"] != _duplicates(doc["files"]):
         raise DataValidationError("manifest duplicate groups inconsistent with files")
+    if mtype == "raw":
+        _validate_layout(doc)  # after the per-file path and summary checks
     if doc["manifest_sha256"] != content_sha256(doc):
         raise DataValidationError("manifest_sha256 does not match the manifest content")
+
+
+def _validate_layout(doc: dict[str, Any]) -> None:
+    """Collection/case provenance of a raw manifest (nested or flat; never flattened)."""
+    layout = doc["source_layout"]
+    if not isinstance(layout, dict) or set(layout) != {
+        "layout",
+        "collections",
+        "data_root_reference",
+    }:
+        raise DataValidationError("malformed source_layout")
+    if layout["layout"] not in LAYOUTS or layout["layout"] == "mixed":
+        raise DataValidationError(f"invalid source_layout.layout {layout['layout']!r}")
+    ref = layout["data_root_reference"]
+    if ref is not None and not is_safe_relpath(str(ref)):
+        raise DataValidationError("data_root_reference must be a safe relative path")
+    for f in doc["files"]:
+        coll = f.get("collection")
+        if coll is not None and (
+            not isinstance(coll, str) or "/" in coll or "\\" in coll or not coll.strip(".")
+        ):
+            raise DataValidationError(f"invalid collection {coll!r}")
+        if f["file_type"] in ("image", "label") and f["case_id"]:
+            expected = f"{case_relpath(coll, str(f['case_id']))}/{f['filename']}"
+            if f["relpath"] != expected:
+                raise DataValidationError(
+                    f"{f['relpath']}: path does not match its collection/case ({expected})"
+                )
+    if doc["cases"] != _cases(doc["files"]):
+        raise DataValidationError("manifest cases table inconsistent with files")
+    if layout["collections"] != _collection_counts(doc["cases"]):
+        raise DataValidationError("source_layout.collections inconsistent with cases")
+    has_coll = any(c["collection"] is not None for c in doc["cases"])
+    has_flat = any(c["collection"] is None for c in doc["cases"])
+    if has_coll and has_flat:
+        raise DataValidationError("mixed flat and nested cases in one manifest")
+    if doc["cases"] and layout["layout"] != ("nested_collections" if has_coll else "flat"):
+        raise DataValidationError("source_layout.layout inconsistent with cases")
 
 
 def manifest_to_csv(doc: dict[str, Any]) -> str:

@@ -20,9 +20,15 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Sequence
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from brats_uncertainty.data.checksums import (
+    ChecksumReport,
+    parse_checksum_file,
+    verify_checksums,
+)
 from brats_uncertainty.data.crosswalk import parse_rows, read_table_records
 from brats_uncertainty.data.integrity import IntegrityReport, validate_dataset_tree
 from brats_uncertainty.data.manifest_doc import build_raw_manifest, manifest_to_csv
@@ -33,6 +39,7 @@ from brats_uncertainty.data.records import (
     Clock,
     CountsRecord,
     HashedFile,
+    InventoryEntry,
     MetadataFileRecord,
     make_stamp,
     read_acquisition_record,
@@ -161,7 +168,38 @@ def stage_validate_data(
         require_labels=True,
         deep=deep,
         expected_shape=cfg.get("layout", {}).get("expected_shape"),
+        expected_layout=cfg.get("layout", {}).get("tree"),
     )
+
+
+def stage_verify_checksums(
+    repo_root: Path,
+    sums_file: Path,
+    delivery_root: Path,
+    *,
+    prefix: str,
+    out: Path,
+    require_clean_commit: bool = True,
+) -> ChecksumReport:
+    """B2 support: verify the delivered files against the provider checksum file (real mode only).
+
+    The checksum file is used exactly as delivered (see ``data.checksums``). The
+    report is written once (never overwritten) and fails closed on any problem.
+    """
+    # part of B2 (before B2 can pass): allowed while B1 PASSED and B2 AUTHORIZED/RUNNING
+    _enter(repo_root, "acquire_data", [sums_file, delivery_root], [out], False)
+    report = verify_checksums(parse_checksum_file(sums_file), delivery_root, prefix=prefix)
+    stamp = make_stamp(repo_root, require_clean_commit=require_clean_commit)
+    write_json(
+        out, {"kind": "provider_checksum_verification", **report.to_dict(), "stamp": asdict(stamp)}
+    )
+    if not report.ok:
+        raise DataValidationError(
+            f"provider checksum verification failed: {len(report.missing)} missing, "
+            f"{len(report.mismatched)} mismatched, {len(report.unlisted)} unlisted, "
+            f"{len(report.links)} links (report: {out.name})"
+        )
+    return report
 
 
 def stage_build_manifest(
@@ -174,6 +212,7 @@ def stage_build_manifest(
     out_csv: Path | None = None,
     metadata_files: Sequence[Path] = (),
     metadata_records: Sequence[Path] = (),
+    data_root_reference: str | None = None,
     synthetic: bool = False,
     require_clean_commit: bool = True,
     clock: Clock = utc_now,
@@ -182,6 +221,12 @@ def stage_build_manifest(
 
     Real mode requires the crosswalk and UCSF-PDGM files together with their
     B3 and B4 records; each file must still match its recorded SHA-256.
+
+    ``data_root_reference`` is the data root's path inside the B2 storage (e.g.
+    ``RSNA-ASNR-MICCAI-BraTS-2021/BraTS2021_TrainingSet``). Real mode requires it,
+    and every manifested data file must then appear in the B2 inventory at
+    ``<data_root_reference>/<relpath>`` with the same SHA-256 and size, so the
+    manifest provably describes the acquired files.
     """
     outputs = [out_json, *([out_csv] if out_csv else [])]
     _enter(
@@ -210,7 +255,17 @@ def stage_build_manifest(
         raise ProvenanceError(
             "real B5 requires the crosswalk and UCSF-PDGM files with B3 and B4 records"
         )
-    report = validate_dataset_tree(data_root, load_schema(dataset_config), deep=True)
+    if not synthetic and not data_root_reference:
+        raise ProvenanceError(
+            "real B5 requires --data-root-reference (the data root's path in the B2 storage)"
+        )
+    cfg = read_yaml(dataset_config)
+    report = validate_dataset_tree(
+        data_root,
+        load_schema(dataset_config),
+        deep=True,
+        expected_layout=cfg.get("layout", {}).get("tree"),
+    )
     if report.n_case_dirs == 0:
         raise DataValidationError("empty data tree: no case directories to manifest")
     if not report.ok:
@@ -237,7 +292,10 @@ def stage_build_manifest(
                 "n_cases": report.n_case_dirs,
             },
         },
+        data_root_reference=data_root_reference,
     )
+    if data_root_reference:
+        _check_against_inventory(doc, acquisition.inventory, data_root_reference)
     if out_csv and out_csv.exists():
         raise FileExistsError(f"refusing to overwrite {out_csv.name}")
     write_json(out_json, doc)
@@ -250,6 +308,23 @@ def stage_build_manifest(
             if tmp.exists():
                 tmp.unlink()
     return doc
+
+
+def _check_against_inventory(
+    doc: dict[str, Any], inventory: Sequence[InventoryEntry], reference: str
+) -> None:
+    """Every manifested data file must be a B2-acquired file (same path below the reference)."""
+    by_path = {e.relpath: e for e in inventory}
+    for f in doc["files"]:
+        if f["file_type"] == "metadata":
+            continue  # bound to B3/B4 records instead
+        key = f"{reference.strip('/')}/{f['relpath']}"
+        e = by_path.get(key)
+        if e is None or e.sha256 != f["sha256"] or e.size_bytes != f["size_bytes"]:
+            raise ProvenanceError(
+                f"{f['relpath']}: not in the B2 inventory at {key} (or hash/size differ); "
+                "the manifest must describe the acquired files"
+            )
 
 
 def _ids_sha256(ids: Sequence[str]) -> str:

@@ -198,10 +198,38 @@ def _cmd_build_manifest(root: Path, args: argparse.Namespace) -> int:
         out_csv=Path(args.out_csv) if args.out_csv else None,
         metadata_files=[Path(m) for m in args.metadata_file or []],
         metadata_records=[Path(r) for r in args.metadata_record or []],
+        data_root_reference=args.data_root_reference,
         synthetic=args.synthetic,
     )
     print(f"B5 raw manifest: {doc['summary']} manifest_sha256={doc['manifest_sha256']}")
     return 0
+
+
+def _cmd_verify_checksums(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.data.stages import stage_verify_checksums
+
+    report = stage_verify_checksums(
+        root, Path(args.sums), Path(args.root), prefix=args.select, out=Path(args.out)
+    )
+    print(
+        f"provider checksums OK: {report.n_verified}/{report.n_selected} selected files verified "
+        f"({', '.join(report.algorithms)}); {report.n_not_selected} listed entries not selected"
+    )
+    return 0
+
+
+def _cmd_storage_preflight(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.data.preflight import GIB, storage_preflight
+
+    result = storage_preflight(
+        int(args.selected_gib * GIB),
+        delivery_dir=Path(args.delivery_dir),
+        storage_dir=Path(args.storage_dir) if args.storage_dir else None,
+        margin=args.margin,
+        reserve_bytes=int(args.reserve_gib * GIB),
+    )
+    print(result.describe())
+    return 0 if result.ok else 1
 
 
 def _cmd_derive_counts(root: Path, args: argparse.Namespace) -> int:
@@ -324,8 +352,38 @@ def build_parser() -> argparse.ArgumentParser:
     bm.add_argument("--metadata-record", action="append", help="B3/B4 record of each metadata file")
     bm.add_argument("--out", required=True, help="manifest JSON")
     bm.add_argument("--out-csv", default=None, help="manifest file table as CSV")
+    bm.add_argument(
+        "--data-root-reference",
+        default=None,
+        help="data root's path inside the B2 storage, e.g. "
+        "RSNA-ASNR-MICCAI-BraTS-2021/BraTS2021_TrainingSet (required for real B5)",
+    )
     bm.add_argument("--synthetic", action="store_true", help="SYNTHETIC_TEST_DATA inputs only")
     bm.set_defaults(func=_cmd_build_manifest)
+    vc = sub.add_parser(
+        "verify-checksums", help="B2: verify delivered files against the provider .sums (gated)"
+    )
+    vc.add_argument("--sums", required=True, help="provider checksum file, exactly as delivered")
+    vc.add_argument("--root", required=True, help="directory the listed paths are relative to")
+    vc.add_argument(
+        "--select",
+        required=True,
+        help="listed prefix that was downloaded, e.g. "
+        "RSNA-ASNR-MICCAI-BraTS-2021/BraTS2021_TrainingSet",
+    )
+    vc.add_argument("--out", required=True, help="verification report JSON (never overwritten)")
+    vc.set_defaults(func=_cmd_verify_checksums)
+    sp = sub.add_parser(
+        "storage-preflight", help="B2: is there disk space for the download and import copy?"
+    )
+    sp.add_argument(
+        "--selected-gib", type=float, required=True, help="selection size shown by the client"
+    )
+    sp.add_argument("--delivery-dir", required=True, help="where the official download goes")
+    sp.add_argument("--storage-dir", default=None, help="local-import storage root")
+    sp.add_argument("--margin", type=float, default=0.10, help="safety margin (fraction)")
+    sp.add_argument("--reserve-gib", type=float, default=10.0, help="free space left per drive")
+    sp.set_defaults(func=_cmd_storage_preflight)
     dc = sub.add_parser("derive-counts", help="B6: counts from the hashed crosswalk (gated)")
     dc.add_argument("--crosswalk", required=True)
     dc.add_argument("--b3-record", required=True)

@@ -70,6 +70,8 @@ The external class follows the rules below. It is never inferred from public dow
 
 ## 4. Runtime acquisition procedure (PLANNED WORKFLOW; B2 ready, not executed)
 
+The manual official download (IBM Aspera, `BraTS2021_TrainingSet` and the `.sums` file only, a disk-space preflight first, the official nested hierarchy kept) is described in [B2_OFFICIAL_DOWNLOAD_RUNBOOK.md](B2_OFFICIAL_DOWNLOAD_RUNBOOK.md).
+
 ```
 approved source -> acquisition (B2) -> integrity verification -> manifest (B5) -> count verification (B6)
 ```

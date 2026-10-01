@@ -328,6 +328,7 @@ def test_failed_manifest_csv_write_leaves_no_partial(
     assert isinstance(rec, AcquisitionRecord)
     cfg = yaml.safe_load((repo_root / "configs/dataset/brats2021.yaml").read_text(encoding="utf-8"))
     cfg["layout"]["case_id_pattern"] = r"SYN-\d{4}"
+    cfg["layout"]["tree"] = "flat"  # flat synthetic fixture (nested: test_nested_layout.py)
     cfg_path = tmp_path / "cfg.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
     real_replace = Path.replace
@@ -533,6 +534,7 @@ def test_b5_end_to_end_deterministic_manifest(repo_root: Path, tmp_path: Path) -
             (repo_root / "configs/dataset/brats2021.yaml").read_text(encoding="utf-8")
         )
         cfg["layout"]["case_id_pattern"] = r"SYN-\d{4}"
+        cfg["layout"]["tree"] = "flat"  # flat synthetic fixture (nested: test_nested_layout.py)
         (base / "cfg.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
         acq = base / ("B2_a.json" if k == "b" else "B2.json")
         doc = stage_build_manifest(

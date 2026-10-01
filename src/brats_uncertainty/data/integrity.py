@@ -5,8 +5,12 @@ whole tree is audited in one pass. Checks:
 
 - expected file existence and file-naming conventions (dataset schema);
 - modality completeness (T1, T1c, T2, FLAIR) and label availability;
-- duplicate or colliding case IDs; expected-vs-found case IDs;
-- unexpected files (top level and inside case directories);
+- case discovery in a flat (``root/<case>``) or nested-collection
+  (``root/<collection>/<case>``, the official TCIA delivery) tree, see
+  ``data.layout``; the tree is never flattened;
+- duplicate or colliding case IDs (also across collections); expected-vs-found
+  case IDs; the configured layout (``layout.tree``);
+- unexpected files and unexpected nesting (root, collections, case directories);
 - corrupt files: gzip stream integrity (CRC) and NIfTI-1/2 header validity;
 - dimensional consistency across a case's modalities and label;
 - hash mismatches against a previously recorded manifest.
@@ -26,6 +30,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from brats_uncertainty.data.layout import discover_cases
 from brats_uncertainty.data.manifest import Manifest, verify_manifest
 from brats_uncertainty.data.schema import DatasetSchema
 from brats_uncertainty.preprocessing.modalities import MODALITIES
@@ -103,6 +108,8 @@ class Issue:
 @dataclass
 class IntegrityReport:
     dataset: str
+    layout: str = "empty"
+    collections: dict[str, int] = field(default_factory=dict)
     n_case_dirs: int = 0
     n_complete_cases: int = 0
     n_cases_with_label: int = 0
@@ -137,40 +144,41 @@ def validate_dataset_tree(
     expected_case_ids: Iterable[str] | None = None,
     expected_shape: Sequence[int] | None = None,
     manifest: Manifest | None = None,
+    expected_layout: str | None = None,
 ) -> IntegrityReport:
-    """Audit ``data_root/<case_id>/`` against the dataset schema."""
+    """Audit ``data_root/[<collection>/]<case_id>/`` against the dataset schema."""
     root = Path(data_root)
     report = IntegrityReport(dataset=schema.name)
     if not root.is_dir():
         report.add("error", "missing_root", str(root), "data root does not exist")
         return report
-    found: dict[str, str] = {}
-    for entry in sorted(root.iterdir()):
-        rel = entry.name
-        if is_link(entry):
-            report.add("error", "link", rel, "symbolic link or junction (not followed)")
-            continue
-        if entry.is_file():
-            report.add(
-                "warning", "unexpected_file", rel, "file at top level (expected case directories)"
-            )
-            continue
-        case_id = entry.name
-        if not schema.is_valid_case_id(case_id):
-            report.add(
-                "error", "invalid_case_id", rel, "directory name does not match the case-ID pattern"
-            )
-            continue
-        key = case_id.lower()
-        if key in found:
-            report.add("error", "duplicate_case_id", rel, f"collides with {found[key]}")
-            continue
-        found[key] = case_id
+    found = discover_cases(root, schema)
+    report.layout = found.layout
+    report.collections = found.collections
+    for issue in found.issues:
+        report.add(issue.severity, issue.code, issue.path, issue.message)
+    if expected_layout is not None and found.cases and found.layout != expected_layout:
+        report.add(
+            "error",
+            "unexpected_layout",
+            ".",
+            f"tree layout {found.layout!r} differs from the configured {expected_layout!r}",
+        )
+    for case in found.cases:
         report.n_case_dirs += 1
-        _validate_case(entry, case_id, schema, report, require_labels, deep, expected_shape)
+        _validate_case(
+            case.path,
+            case.case_id,
+            case.relpath,
+            schema,
+            report,
+            require_labels,
+            deep,
+            expected_shape,
+        )
     if expected_case_ids is not None:
         expected = set(expected_case_ids)
-        present = set(found.values())
+        present = {c.case_id for c in found.cases}
         for cid in sorted(expected - present):
             report.add("error", "missing_case", cid, "expected case not found")
         for cid in sorted(present - expected):
@@ -186,6 +194,7 @@ def validate_dataset_tree(
 def _validate_case(
     case_dir: Path,
     case_id: str,
+    rel: str,
     schema: DatasetSchema,
     report: IntegrityReport,
     require_labels: bool,
@@ -194,44 +203,50 @@ def _validate_case(
 ) -> None:
     expected_names = {schema.image_name(case_id, m): m for m in MODALITIES}
     label_name = schema.label_name(case_id)
-    links = sorted(p.name for p in case_dir.iterdir() if is_link(p))
-    for name in links:
-        report.add("error", "link", f"{case_id}/{name}", "symbolic link or junction (not followed)")
-    present = {p.name for p in case_dir.iterdir() if not is_link(p)}
+    children = sorted(case_dir.iterdir(), key=lambda p: p.name)
+    for p in children:
+        if is_link(p):
+            report.add(
+                "error", "link", f"{rel}/{p.name}", "symbolic link or junction (not followed)"
+            )
+        elif p.is_dir():
+            report.add(
+                "error",
+                "unexpected_nested_structure",
+                f"{rel}/{p.name}",
+                "subdirectory inside a case directory",
+            )
+    present = {p.name for p in children if not is_link(p) and p.is_file()}
     for name in sorted(present - set(expected_names) - {label_name}):
-        report.add(
-            "warning", "unexpected_file", f"{case_id}/{name}", "file not in the dataset schema"
-        )
+        report.add("warning", "unexpected_file", f"{rel}/{name}", "file not in the dataset schema")
     complete = True
     shapes: dict[str, tuple[int, ...]] = {}
     for name, modality in expected_names.items():
         if name not in present:
-            report.add("error", "missing_modality", f"{case_id}/{name}", f"{modality} missing")
+            report.add("error", "missing_modality", f"{rel}/{name}", f"{modality} missing")
             complete = False
             continue
-        shape = _check_file(case_dir / name, f"{case_id}/{name}", report, deep)
+        shape = _check_file(case_dir / name, f"{rel}/{name}", report, deep)
         if shape is None:
             complete = False
         else:
             shapes[modality] = shape
     if label_name in present:
         report.n_cases_with_label += 1
-        shape = _check_file(case_dir / label_name, f"{case_id}/{label_name}", report, deep)
+        shape = _check_file(case_dir / label_name, f"{rel}/{label_name}", report, deep)
         if shape is not None:
             shapes["label"] = shape
     elif require_labels:
-        report.add("error", "missing_label", f"{case_id}/{label_name}", "label missing")
+        report.add("error", "missing_label", f"{rel}/{label_name}", "label missing")
     distinct = set(shapes.values())
     if len(distinct) > 1:
-        report.add("error", "dimension_mismatch", case_id, f"shapes differ: {shapes}")
+        report.add("error", "dimension_mismatch", rel, f"shapes differ: {shapes}")
     for s in distinct:
         report.shapes[str(list(s))] = report.shapes.get(str(list(s)), 0) + 1
         if len(s) != 3:
-            report.add("error", "not_3d", case_id, f"volume is not 3-D: {s}")
+            report.add("error", "not_3d", rel, f"volume is not 3-D: {s}")
         if expected_shape is not None and tuple(s) != tuple(expected_shape):
-            report.add(
-                "warning", "unexpected_shape", case_id, f"shape {s} != {tuple(expected_shape)}"
-            )
+            report.add("warning", "unexpected_shape", rel, f"shape {s} != {tuple(expected_shape)}")
     if complete:
         report.n_complete_cases += 1
 

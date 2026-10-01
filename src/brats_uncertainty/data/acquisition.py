@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import IO
 from urllib.parse import urlsplit, urlunsplit
 
+from brats_uncertainty.data.preflight import GIB, require_free_space
 from brats_uncertainty.data.records import (
     AcquisitionRecord,
     Clock,
@@ -65,6 +66,7 @@ from brats_uncertainty.utils.paths import is_link, is_safe_relpath, is_within
 
 _LOG = get_logger("acquisition")
 _CHUNK = 1 << 20
+IMPORT_RESERVE_BYTES = 1 * GIB  # free space that must remain after a local-import copy
 
 
 def redact_url(url: str) -> str:
@@ -156,13 +158,22 @@ class LocalImportAdapter(AcquisitionAdapter):
     def _rel(self, p: Path) -> str:
         return p.name if self.delivered.is_file() else p.relative_to(self.delivered).as_posix()
 
+    def required_bytes(self) -> int:
+        return sum(p.stat().st_size for p in self._files())
+
     def plan(self) -> AcquisitionPlan:
-        items = tuple(
-            PlannedItem(self._rel(p), "operator-delivered local file") for p in self._files()
+        files = self._files()
+        items = tuple(PlannedItem(self._rel(p), "operator-delivered local file") for p in files)
+        total = sum(p.stat().st_size for p in files)
+        notes = (
+            f"{len(files)} files, {total} bytes; copied byte-for-byte with their relative "
+            "paths (official hierarchy preserved, nothing flattened or renamed)",
         )
-        return AcquisitionPlan(self.name, self.source, False, items)
+        return AcquisitionPlan(self.name, self.source, False, items, notes)
 
     def _materialize(self, storage_root: Path) -> None:
+        # fail closed before copying anything if the storage drive is too small
+        require_free_space(storage_root, self.required_bytes(), reserve_bytes=IMPORT_RESERVE_BYTES)
         for p in self._files():
             dest = storage_root / self._rel(p)
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -229,7 +240,11 @@ class SyntheticFixtureAdapter(AcquisitionAdapter):
     synthetic = True
 
     def __init__(
-        self, repo_root: Path, n_cases: int = 3, crosswalk_counts: tuple[int, int] = (2, 1)
+        self,
+        repo_root: Path,
+        n_cases: int = 3,
+        crosswalk_counts: tuple[int, int] = (2, 1),
+        collections: tuple[str, ...] | None = None,
     ) -> None:
         super().__init__(
             SourceInfo(
@@ -243,6 +258,7 @@ class SyntheticFixtureAdapter(AcquisitionAdapter):
         self.repo_root = repo_root
         self.n_cases = n_cases
         self.crosswalk_counts = crosswalk_counts
+        self.collections = collections
         self.generated: SyntheticDataset | None = None
 
     def plan(self) -> AcquisitionPlan:
@@ -260,6 +276,7 @@ class SyntheticFixtureAdapter(AcquisitionAdapter):
             repo_root=self.repo_root,
             n_cases=self.n_cases,
             crosswalk_counts=self.crosswalk_counts,
+            collections=self.collections,
         )
 
 

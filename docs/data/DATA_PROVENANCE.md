@@ -75,22 +75,27 @@ You do **not** receive patient data from GitHub.
    - `pip install -e ".[dev,io]"`
    - `brats-uncertainty verify-protocol`
 2. Obtain access under the providers' terms and the route in the closed B1 evidence. Run `brats-uncertainty init-data-dirs`.
-3. **B2.** Dry run first, then execute:
+3. **B2.** The manual download is described in [B2_OFFICIAL_DOWNLOAD_RUNBOOK.md](B2_OFFICIAL_DOWNLOAD_RUNBOOK.md): official TCIA Aspera package, `BraTS2021_TrainingSet` and the `.sums` file only, a disk-space preflight first, and the hierarchy kept as delivered. Then:
 
    ```
-   brats-uncertainty acquire --adapter local-import --delivered <operator download> \
+   brats-uncertainty verify-checksums --sums <delivery>/RSNA-ASNR-MICCAI-BraTS-2021.sums \
+     --root <delivery> --select RSNA-ASNR-MICCAI-BraTS-2021/BraTS2021_TrainingSet \
+     --out data/manifests/B2_provider_checksums.json
+   brats-uncertainty acquire --adapter local-import --delivered <delivery> \
      --dataset RSNA-ASNR-MICCAI-BraTS-2021 --dataset-version "<as on the official page>" \
      --doi 10.7937/jc8x-9874 --route "<B1-approved route>" \
-     --storage-root data/raw/brats2021 --acquired-by "<name>" --out data/manifests/B2.json
-   # then the same with --execute
+     --storage-root <private storage> --storage-label "<logical label>" \
+     --acquired-by "<name>" --out data/manifests/B2.json
+   # dry run first; then the same with --execute (byte-for-byte copy, hierarchy preserved)
    ```
 
-4. **B3 and B4.**
-   - `brats-uncertainty hash-metadata --gate B3 --file data/raw/brats2021/<...>/BraTS2021_MappingToTCIA.xlsx --source-url https://www.cancerimagingarchive.net/analysis-result/rsna-asnr-miccai-brats-2021/ --doi 10.7937/jc8x-9874 --out data/manifests/B3.json`
+4. **B3 and B4.** Hash the files exactly as delivered, without opening or re-saving them:
+   - `brats-uncertainty hash-metadata --gate B3 --file <private storage>/BraTS2021_MappingToTCIA.xlsx --path-reference "<logical label>/BraTS2021_MappingToTCIA.xlsx" --source-url https://www.cancerimagingarchive.net/analysis-result/rsna-asnr-miccai-brats-2021/ --doi 10.7937/jc8x-9874 --out data/manifests/B3.json`
    - the same with `--gate B4` for `UCSF-PDGM-metadata_v5.csv`, using the UCSF-PDGM collection page.
-5. **B5.**
-   - `brats-uncertainty validate-data --dataset-config configs/dataset/brats2021.yaml --data-root <training folder>`
-   - `brats-uncertainty build-manifest --dataset-config configs/dataset/brats2021.yaml --data-root <training folder> --acquisition-record data/manifests/B2.json --metadata-file <crosswalk> --metadata-record data/manifests/B3.json --metadata-file <ucsf csv> --metadata-record data/manifests/B4.json --out data/manifests/B5_manifest.json --out-csv data/manifests/B5_manifest.csv`
+5. **B5.** The training folder keeps the official nested layout, `<collection>/<case_id>/`. The dataset config requires `layout.tree: nested_collections`, and a flattened copy is refused.
+   - `brats-uncertainty validate-data --dataset-config configs/dataset/brats2021.yaml --data-root <private storage>/RSNA-ASNR-MICCAI-BraTS-2021/BraTS2021_TrainingSet`
+   - `brats-uncertainty build-manifest --dataset-config configs/dataset/brats2021.yaml --data-root <private storage>/RSNA-ASNR-MICCAI-BraTS-2021/BraTS2021_TrainingSet --data-root-reference RSNA-ASNR-MICCAI-BraTS-2021/BraTS2021_TrainingSet --acquisition-record data/manifests/B2.json --metadata-file <crosswalk> --metadata-record data/manifests/B3.json --metadata-file <ucsf csv> --metadata-record data/manifests/B4.json --out data/manifests/B5_manifest.json --out-csv data/manifests/B5_manifest.csv`
+   - Manifest schema v3 records, for each case, its `collection`, `case_id` and `relative_case_path`, plus the modality and label files with sizes and SHA-256. It also records `source_layout` (layout, per-collection counts and `data_root_reference`). Every manifested file must appear in the B2 inventory at `<data_root_reference>/<relpath>` with the same hash and size.
 6. **B6.** `brats-uncertainty derive-counts --crosswalk <crosswalk> --b3-record data/manifests/B3.json --out data/manifests/B6.json`
 7. **Compare** SHA-256 values, `manifest_sha256`, counts and record fingerprints with the published records. Equal values mean byte-identical inputs and identical results.
 

@@ -90,15 +90,23 @@ def _record(root: Path, path: Path) -> FileRecord:
 def build_manifest(
     data_root: str | Path, schema: DatasetSchema, *, require_labels: bool = True
 ) -> Manifest:
-    """Scan ``data_root/<case_id>/`` directories and hash every expected file."""
+    """Scan ``data_root/[<collection>/]<case_id>/`` directories and hash every expected file.
+
+    Flat and nested-collection trees are both supported (``data.layout``); relpaths keep
+    the collection directory. Any layout error fails closed.
+    """
+    from brats_uncertainty.data.layout import discover_cases
+
     root = Path(data_root).resolve()
     if not root.is_dir():
         raise DataValidationError(f"data root does not exist: {root}")
+    found = discover_cases(root, schema)
+    if found.errors:
+        e = found.errors[0]
+        raise DataValidationError(f"invalid data tree for {schema.name}: {e.code} {e.path}")
     entries: list[ManifestEntry] = []
-    for case_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-        case_id = case_dir.name
-        if not schema.is_valid_case_id(case_id):
-            raise DataValidationError(f"invalid case ID for {schema.name}: {case_id!r}")
+    for case in found.cases:
+        case_dir, case_id = case.path, case.case_id
         images = {m: _record(root, case_dir / schema.image_name(case_id, m)) for m in MODALITIES}
         label_path = case_dir / schema.label_name(case_id)
         label = _record(root, label_path) if require_labels or label_path.exists() else None

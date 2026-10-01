@@ -18,3 +18,8 @@ Everything in this directory is **synthetic**. It is generated in memory by
   `SYNTHETIC_TEST_B1: PENDING -> TEST_AUTHORIZED` (`data/synthetic_b1.py`). The real
   gate B1, real acquisition and the repository scan all refuse it. Never copy it to
   `docs/data/B1_EVIDENCE_<date>.md`.
+- `nested_layout.py` builds, at test time and only in pytest temporary
+  directories, a synthetic tree in the official nested TCIA layout
+  (`<collection>/<case_id>/`). Its case IDs (`BraTS2021_SYNTH001` ...) are
+  clearly synthetic and do not match the real `BraTS2021_<5 digits>` pattern.
+  The files are tiny all-zero NIfTI headers and are never committed.

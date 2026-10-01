@@ -78,7 +78,7 @@
       }
     },
     "schema_version": {
-      "const": 2
+      "const": 3
     },
     "synthetic": {
       "type": "boolean",
@@ -96,6 +96,7 @@
     "file": {
       "type": "object",
       "required": [
+        "collection",
         "case_id",
         "file_type",
         "modality",
@@ -106,6 +107,12 @@
       ],
       "additionalProperties": false,
       "properties": {
+        "collection": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "case_id": {
           "type": [
             "string",

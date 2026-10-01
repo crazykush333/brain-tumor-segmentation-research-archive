@@ -58,9 +58,14 @@ def test_manifest_missing_modality_and_bad_id(tmp_path: Path) -> None:
     with pytest.raises(DataValidationError, match="missing file"):
         build_manifest(tmp_path, SCHEMA)
     other = tmp_path / "other"
-    (other / "not_a_case").mkdir(parents=True)
-    with pytest.raises(DataValidationError, match="invalid case ID"):
+    (other / "not_a_case").mkdir(parents=True)  # neither a case nor a collection with cases
+    with pytest.raises(DataValidationError, match="empty_collection not_a_case"):
         build_manifest(other, SCHEMA)
+    bad = tmp_path / "bad"
+    (bad / "not_a_case").mkdir(parents=True)
+    (bad / "not_a_case" / ("x" + SCHEMA.file_ending)).write_bytes(b"x")  # data, invalid name
+    with pytest.raises(DataValidationError, match="malformed_case_dir not_a_case"):
+        build_manifest(bad, SCHEMA)
 
 
 def test_duplicate_content_detected(tmp_path: Path) -> None:

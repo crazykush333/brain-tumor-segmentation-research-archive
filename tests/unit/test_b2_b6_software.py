@@ -109,6 +109,7 @@ def _synthetic_config(tmp_path: Path, repo_root: Path) -> Path:
     cfg = yaml.safe_load((repo_root / "configs/dataset/brats2021.yaml").read_text(encoding="utf-8"))
     cfg["name"] = "synthetic"
     cfg["layout"]["case_id_pattern"] = r"SYN-\d{4}"
+    cfg["layout"]["tree"] = "flat"  # flat synthetic fixture (nested: test_nested_layout.py)
     p = tmp_path / "synthetic_dataset.yaml"
     p.write_text(yaml.safe_dump(cfg), encoding="utf-8")
     return p
