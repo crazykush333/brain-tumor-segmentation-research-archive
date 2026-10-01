@@ -34,6 +34,7 @@ brats-uncertainty storage-preflight --selected-gib <size shown by the client> --
 ```
 
 The preflight:
+- counts, for each copy, the client-reported selection plus an allowance for the two B3/B4 metadata files (16 MiB by default; `--metadata-mib`), which are downloaded separately;
 - adds a 10 % margin per copy and keeps 10 GiB free per drive;
 - counts the download and the import copy on the same drive when they share one;
 - creates nothing.

@@ -571,8 +571,28 @@ def test_storage_preflight_same_and_separate_drives(tmp_path: Path) -> None:
         storage_dir=tmp_path / "s",
         free_bytes={key: 60 * GIB},
     )
-    # download + import copy on one drive: 2 x 22 GiB + 10 GiB reserve = 54 GiB <= 60
-    assert same.ok and same.drives[0].needed_bytes == 2 * int(20 * GIB * 1.1) + 10 * GIB
+    # download + import copy on one drive, each = (selection + metadata allowance) x 1.1,
+    # plus the 10 GiB reserve: about 54 GiB <= 60
+    meta = preflight_mod.DEFAULT_METADATA_BYTES
+    assert same.ok and same.metadata_bytes == meta > 0
+    assert same.drives[0].needed_bytes == 2 * int((20 * GIB + meta) * 1.1) + 10 * GIB
+    # the metadata allowance is counted: a selection that just fits without it fails with it
+    edge = int((60 * GIB - 10 * GIB) / 2 / 1.1)  # exactly fills the drive without metadata
+    assert storage_preflight(
+        edge,
+        delivery_dir=tmp_path / "d",
+        storage_dir=tmp_path / "s",
+        free_bytes={key: 60 * GIB},
+        metadata_bytes=0,
+    ).ok
+    assert not storage_preflight(
+        edge,
+        delivery_dir=tmp_path / "d",
+        storage_dir=tmp_path / "s",
+        free_bytes={key: 60 * GIB},
+    ).ok
+    with pytest.raises(ValueError, match="metadata_bytes"):
+        storage_preflight(GIB, delivery_dir=tmp_path, storage_dir=None, metadata_bytes=-1)
     tight = storage_preflight(
         30 * GIB,
         delivery_dir=tmp_path / "d",

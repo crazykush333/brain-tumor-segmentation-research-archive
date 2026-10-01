@@ -227,6 +227,7 @@ def _cmd_storage_preflight(root: Path, args: argparse.Namespace) -> int:
         storage_dir=Path(args.storage_dir) if args.storage_dir else None,
         margin=args.margin,
         reserve_bytes=int(args.reserve_gib * GIB),
+        metadata_bytes=int(args.metadata_mib * (1 << 20)),
     )
     print(result.describe())
     return 0 if result.ok else 1
@@ -383,6 +384,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--storage-dir", default=None, help="local-import storage root")
     sp.add_argument("--margin", type=float, default=0.10, help="safety margin (fraction)")
     sp.add_argument("--reserve-gib", type=float, default=10.0, help="free space left per drive")
+    sp.add_argument(
+        "--metadata-mib", type=float, default=16.0, help="allowance for the B3/B4 metadata files"
+    )
     sp.set_defaults(func=_cmd_storage_preflight)
     dc = sub.add_parser("derive-counts", help="B6: counts from the hashed crosswalk (gated)")
     dc.add_argument("--crosswalk", required=True)
