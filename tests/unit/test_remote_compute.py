@@ -13,8 +13,12 @@ import pytest
 import yaml
 
 from brats_uncertainty.cli import main
-from brats_uncertainty.compute import jobs as jobs_mod
-from brats_uncertainty.compute.jobs import decide_training, load_jobs, read_record, run_training_job
+from brats_uncertainty.compute.jobs import (
+    invalidate_run,
+    load_jobs,
+    read_manifest,
+    run_training_job,
+)
 from brats_uncertainty.compute.probe import (
     COMPUTE_CONFIG,
     GIB,
@@ -27,12 +31,12 @@ from brats_uncertainty.data.records import InventoryEntry, inventory, verify_inv
 from brats_uncertainty.errors import ProvenanceError, ResearchGateError
 from brats_uncertainty.models.nnunet import (
     RunSpec,
-    run_results_dir,
+    run_namespace,
     train_command,
     train_environment,
 )
 from brats_uncertainty.results.site_export import list_amendments
-from tests.conftest import REPO_ROOT, make_status_repo
+from tests.conftest import REPO_ROOT
 
 CFG = yaml.safe_load((REPO_ROOT / COMPUTE_CONFIG).read_text(encoding="utf-8"))
 H = "a" * 64
@@ -155,142 +159,222 @@ def test_compute_preflight_cli_writes_report(tmp_path: Path) -> None:
 
 
 # ================================================================ training runs
-def test_per_run_results_dirs_and_resume_flag(tmp_path: Path) -> None:
-    roots = {run_results_dir(tmp_path, RunSpec(a, s)) for a in "AB" for s in (0, 1, 2)}
-    assert len(roots) == 6  # seeds never share an nnU-Net output folder
-    env = train_environment(RunSpec("B", 2), tmp_path)
-    assert env["nnUNet_results"].endswith("armB_seed2") and env["BRATS_UNC_SEED"] == "2"
+def test_run_namespaces_never_collide(tmp_path: Path) -> None:
+    runs = [RunSpec(a, s) for a in "AB" for s in (0, 1, 2)]
+    dirs = {run_namespace(tmp_path, e, r) for e in ("MAIN", "EXP-001") for r in runs}
+    dirs |= {run_namespace(tmp_path, "EXP-001", r, label="P2") for r in runs}
+    assert len(dirs) == 18  # 6 runs x (MAIN, EXP-001, EXP-001/P2): all distinct
+    assert run_namespace(tmp_path, "MAIN", RunSpec("B", 2)) == tmp_path / "MAIN" / "arm_b_seed_2"
+    for bad in ("main", "../X", "MAIN/x", ""):
+        with pytest.raises(ValueError):
+            run_namespace(tmp_path, bad, RunSpec("A", 0))
+    with pytest.raises(ValueError):
+        run_namespace(tmp_path, "EXP-001", RunSpec("A", 0), label="../x")
+    env = train_environment(RunSpec("B", 2), tmp_path / "MAIN" / "arm_b_seed_2")
+    assert env["nnUNet_results"].endswith("arm_b_seed_2") and env["BRATS_UNC_SEED"] == "2"
     assert "nnUNet_results" not in train_environment(RunSpec("A", 0))
     assert train_command(501, RunSpec("A", 0))[-1] != "--c"
     assert train_command(501, RunSpec("A", 0), resume=True)[-1] == "--c"
 
 
-def test_job_plan_is_exactly_the_protocol_runs() -> None:
+def test_job_plan_comes_from_the_frozen_training_config() -> None:
     jobs = load_jobs(REPO_ROOT)
-    runs = sorted((j.arm, j.seed) for j in jobs.values() if j.kind == "training")
-    assert runs == [("A", 0), ("A", 1), ("A", 2), ("B", 0), ("B", 1), ("B", 2)]
-    assert all(j.gated_action == "train_main" for j in jobs.values() if j.kind == "training")
+    training = [j for j in jobs.values() if j.kind == "training"]
+    assert sorted((j.arm, j.seed) for j in training) == [
+        ("A", 0),
+        ("A", 1),
+        ("A", 2),
+        ("B", 0),
+        ("B", 1),
+        ("B", 2),
+    ]
+    assert {j.experiment_id for j in training} == {"MAIN"}
+    assert all(j.gated_action == "train_main" for j in training)
+    assert jobs["JOB-PILOT"].experiment_id == "EXP-001"
+    assert jobs["JOB-PILOT"].gated_action == "run_exp001"
+    assert jobs["JOB-GROUPING"].gated_action == "compute_t_screen"
     assert jobs["JOB-01"].gated_action == "acquire_data" and not jobs["JOB-01"].needs_gpu
+    tc = yaml.safe_load((REPO_ROOT / "configs/experiments/main_training.yaml").read_text("utf-8"))
+    assert tc["epochs"] == 250 and tc["seeds"] == [0, 1, 2]
+    assert tc["configuration"] == "3d_fullres"
+    assert tc["arms"]["B"]["modality_dropout"]["p_full"] == 0.5
+    assert {j.run.trainer for j in training} == {
+        tc["arms"]["A"]["trainer"],
+        tc["arms"]["B"]["trainer"],
+    }
 
 
-def _ckpt(root: Path, name: str) -> Path:
-    p = root / "Dataset501_X" / "Trainer__plans__3d_fullres" / "fold_0" / name
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_bytes(b"synthetic checkpoint")
+def _prov(tmp_path: Path, data_class: str = "SYNTHETIC_TEST_DATA") -> Path:
+    p = tmp_path / f"prov_{data_class}.json"
+    p.write_text(
+        json.dumps({"kind": "nnunet_raw_dataset_conversion", "data_class": data_class}),
+        encoding="utf-8",
+    )
     return p
 
 
-def test_training_decisions(tmp_path: Path) -> None:
-    run_root = tmp_path / "armA_seed0"
-    assert decide_training(None, run_root, allow_restart=False).action == "start"
-    rec = {"status": "FAILED"}
-    assert decide_training(rec, run_root, allow_restart=False).action == "refuse"
-    assert decide_training(rec, run_root, allow_restart=True).action == "restart"
-    _ckpt(run_root, "checkpoint_latest.pth")
-    d = decide_training(rec, run_root, allow_restart=False)
-    assert d.action == "resume" and d.checkpoint is not None
-    assert (
-        decide_training(None, run_root, allow_restart=True).action == "refuse"
-    )  # unknown provenance
-    assert decide_training({"status": "COMPLETED"}, run_root, allow_restart=True).action == "refuse"
+def _kw(tmp_path: Path, **over: Any) -> dict[str, Any]:
+    kw: dict[str, Any] = {
+        "dataset_id": 501,
+        "results_root": tmp_path / "res",
+        "dataset_provenance": _prov(tmp_path),
+        "manifest_sha256": H,
+        "split_sha256": "b" * 64,
+        "synthetic_test_mode": True,
+    }
+    kw.update(over)
+    return kw
 
 
-def test_training_job_is_gated(tmp_path: Path, repo_root: Path) -> None:
-    job = load_jobs(repo_root)["JOB-02"]
-    for root in (repo_root, make_status_repo(tmp_path / "pending", closed=set())):
-        with pytest.raises(ResearchGateError):
-            run_training_job(
-                root,
-                job,
-                dataset_id=501,
-                results_root=tmp_path / "res",
-                state_root=tmp_path / "state",
-                manifest_sha256=H,
-                split_sha256=H,
-                runner=lambda c, e: pytest.fail("must not run"),  # type: ignore[arg-type,return-value]
-            )
-    assert not (tmp_path / "state").exists()
+def _ckpt(run_dir: Path, name: str, content: bytes = b"synthetic checkpoint") -> Path:
+    p = run_dir / "Dataset501_X" / "Trainer__plans__3d_fullres" / "fold_0" / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(content)
+    return p
 
 
-def test_training_job_resumes_and_records(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    root = tmp_path / "repo"
-    monkeypatch.setattr(jobs_mod, "require_action", lambda action, repo: None)  # gates tested above
-    monkeypatch.setattr(jobs_mod, "git_commit", lambda r: "f" * 40)
-    monkeypatch.setattr(jobs_mod, "git_is_dirty", lambda r: False)
+def test_resume_requires_flag_and_verified_checkpoint(tmp_path: Path) -> None:
     job = load_jobs(REPO_ROOT)["JOB-05"]  # arm B seed 0
-    calls: list[tuple[list[str], dict[str, str]]] = []
-    run_root = tmp_path / "res" / "armB_seed0"
+    run_dir = tmp_path / "res" / "MAIN" / "arm_b_seed_0"
+    calls: list[list[str]] = []
 
-    def interrupted(cmd: list[str], env: dict[str, str]) -> int:
-        calls.append((cmd, env))
-        _ckpt(run_root, "checkpoint_latest.pth")
+    def stops(cmd: list[str], env: dict[str, str]) -> int:
+        calls.append(list(cmd))
+        assert env["nnUNet_results"] == str(run_dir)
+        _ckpt(run_dir, "checkpoint_latest.pth")
         return 1
 
     def finishes(cmd: list[str], env: dict[str, str]) -> int:
-        calls.append((cmd, env))
-        _ckpt(run_root, "checkpoint_final.pth")
+        calls.append(list(cmd))
+        _ckpt(run_dir, "checkpoint_final.pth")
         return 0
 
-    kw: dict[str, Any] = {
-        "dataset_id": 501,
-        "results_root": tmp_path / "res",
-        "state_root": tmp_path / "state",
-        "manifest_sha256": H,
-        "split_sha256": "b" * 64,
+    m = run_training_job(REPO_ROOT, job, runner=stops, **_kw(tmp_path))  # type: ignore[arg-type]
+    assert m["status"] == "FAILED" and "--c" not in calls[0]
+    assert m["checkpoint"]["path"].endswith("checkpoint_latest.pth")
+    with pytest.raises(ProvenanceError, match="pass --resume"):  # never silently continued
+        run_training_job(REPO_ROOT, job, runner=finishes, **_kw(tmp_path))  # type: ignore[arg-type]
+    m = run_training_job(  # type: ignore[arg-type]
+        REPO_ROOT, job, runner=finishes, resume=True, **_kw(tmp_path)
+    )
+    assert m["status"] == "COMPLETED" and calls[-1][-1] == "--c"
+    assert m["attempts"][1]["resumed_from"].endswith("checkpoint_latest.pth")
+    assert m["checkpoint_path"].endswith("checkpoint_final.pth")
+    assert {"checkpoint_final.pth", "checkpoint_latest.pth"} <= {
+        Path(a).name for a in m["artifact_paths"]
     }
-    rec = run_training_job(REPO_ROOT, job, runner=interrupted, **kw)  # type: ignore[arg-type]
-    assert rec["status"] == "INTERRUPTED" and rec["attempts"][0]["action"] == "start"
-    assert "--c" not in calls[0][0]
-    assert calls[0][1]["nnUNet_results"] == str(run_root)
-    rec = run_training_job(REPO_ROOT, job, runner=finishes, **kw)  # type: ignore[arg-type]
-    assert rec["status"] == "COMPLETED" and calls[1][0][-1] == "--c"
-    assert rec["attempts"][1]["resumed_from"] == "checkpoint_latest.pth"
-    assert (rec["arm"], rec["seed"], rec["split_sha256"]) == ("B", 0, "b" * 64)
-    assert read_record(tmp_path / "state", "JOB-05") == rec
+    for field in (
+        "experiment_id",
+        "arm",
+        "seed",
+        "protocol_version",
+        "git_commit",
+        "dataset_manifest_sha256",
+        "split_sha256",
+        "config_sha256",
+        "environment_hash",
+        "hardware",
+        "start_time",
+        "end_time",
+        "status",
+        "checkpoint_path",
+        "artifact_paths",
+    ):
+        assert field in m, field
+    assert read_manifest(run_dir) == m
     with pytest.raises(ProvenanceError, match="COMPLETED"):
-        run_training_job(REPO_ROOT, job, runner=finishes, **kw)  # type: ignore[arg-type]
-    assert root.exists() is False
+        run_training_job(  # type: ignore[arg-type]
+            REPO_ROOT, job, runner=finishes, resume=True, **_kw(tmp_path)
+        )
 
 
-def test_training_job_failures_are_recorded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(jobs_mod, "require_action", lambda action, repo: None)
-    monkeypatch.setattr(jobs_mod, "git_commit", lambda r: "f" * 40)
-    monkeypatch.setattr(jobs_mod, "git_is_dirty", lambda r: False)
+def test_checkpoint_and_identity_mismatch_fail_closed(tmp_path: Path) -> None:
+    job = load_jobs(REPO_ROOT)["JOB-02"]
+    run_dir = tmp_path / "res" / "MAIN" / "arm_a_seed_0"
+
+    def stops(cmd: list[str], env: dict[str, str]) -> int:
+        _ckpt(run_dir, "checkpoint_latest.pth")
+        return 1
+
+    run_training_job(REPO_ROOT, job, runner=stops, **_kw(tmp_path))  # type: ignore[arg-type]
+    ok = lambda c, e: 0  # noqa: E731
+    with pytest.raises(ProvenanceError, match="belongs to another configuration"):
+        run_training_job(  # type: ignore[arg-type]
+            REPO_ROOT, job, runner=ok, resume=True, **_kw(tmp_path, split_sha256="c" * 64)
+        )
+    with pytest.raises(ProvenanceError, match="belongs to another configuration"):
+        run_training_job(  # type: ignore[arg-type]
+            REPO_ROOT, job, runner=ok, resume=True, **_kw(tmp_path, manifest_sha256="d" * 64)
+        )
+    _ckpt(run_dir, "checkpoint_latest.pth", b"swapped checkpoint")
+    with pytest.raises(ProvenanceError, match="checkpoint changed"):
+        run_training_job(REPO_ROOT, job, runner=ok, resume=True, **_kw(tmp_path))  # type: ignore[arg-type]
+    invalidate_run(run_dir, "checkpoint swapped (test)")
+    with pytest.raises(ProvenanceError, match="INVALIDATED"):
+        run_training_job(REPO_ROOT, job, runner=ok, resume=True, **_kw(tmp_path))  # type: ignore[arg-type]
+
+
+def test_foreign_checkpoints_and_bad_resume_are_refused(tmp_path: Path) -> None:
     job = load_jobs(REPO_ROOT)["JOB-03"]
-    kw: dict[str, Any] = {
-        "dataset_id": 501,
-        "results_root": tmp_path / "res",
-        "state_root": tmp_path / "state",
-        "manifest_sha256": H,
-        "split_sha256": H,
-    }
-    rec = run_training_job(REPO_ROOT, job, runner=lambda c, e: 2, **kw)  # type: ignore[arg-type]
-    assert rec["status"] == "FAILED"
-    with pytest.raises(ProvenanceError, match="no checkpoint"):  # never a silent restart
-        run_training_job(REPO_ROOT, job, runner=lambda c, e: 0, **kw)  # type: ignore[arg-type]
+    run_dir = tmp_path / "res" / "MAIN" / "arm_a_seed_1"
+    _ckpt(run_dir, "checkpoint_latest.pth")  # appeared without a run manifest
+    with pytest.raises(ProvenanceError, match="unknown provenance"):
+        run_training_job(REPO_ROOT, job, resume=True, **_kw(tmp_path))
+    job2 = load_jobs(REPO_ROOT)["JOB-04"]
+    with pytest.raises(ProvenanceError, match="no earlier attempt"):
+        run_training_job(REPO_ROOT, job2, resume=True, **_kw(tmp_path))
+
+
+def test_failure_without_checkpoint_needs_explicit_restart(tmp_path: Path) -> None:
+    job = load_jobs(REPO_ROOT)["JOB-06"]
+    m = run_training_job(REPO_ROOT, job, runner=lambda c, e: 2, **_kw(tmp_path))  # type: ignore[arg-type]
+    assert m["status"] == "FAILED" and m["checkpoint"] is None
+    with pytest.raises(ProvenanceError, match="never silent"):
+        run_training_job(REPO_ROOT, job, runner=lambda c, e: 0, **_kw(tmp_path))  # type: ignore[arg-type]
 
     def crash(c: list[str], e: dict[str, str]) -> int:
         raise KeyboardInterrupt
 
     with pytest.raises(KeyboardInterrupt):
         run_training_job(  # type: ignore[arg-type]
-            REPO_ROOT, job, runner=crash, allow_restart=True, **kw
+            REPO_ROOT, job, runner=crash, restart_without_checkpoint=True, **_kw(tmp_path)
         )
-    rec2 = read_record(tmp_path / "state", "JOB-03")
-    assert rec2 is not None and rec2["status"] == "FAILED"
-    assert [a["action"] for a in rec2["attempts"]] == ["start", "restart"]
-    with pytest.raises(ProvenanceError, match="split_sha256 changed"):
-        run_training_job(  # type: ignore[arg-type]
-            REPO_ROOT,
+    m2 = read_manifest(tmp_path / "res" / "MAIN" / "arm_b_seed_1")
+    assert m2 is not None and m2["status"] == "FAILED"
+    assert [a["action"] for a in m2["attempts"]] == ["start", "restart"]
+
+
+def test_seeds_and_experiments_keep_separate_manifests(tmp_path: Path) -> None:
+    jobs = load_jobs(REPO_ROOT)
+    for jid in ("JOB-02", "JOB-03", "JOB-04"):
+        run_training_job(REPO_ROOT, jobs[jid], runner=lambda c, e: 1, **_kw(tmp_path))  # type: ignore[arg-type]
+    seeds = sorted(
+        read_manifest(d)["seed"]  # type: ignore[index]
+        for d in (tmp_path / "res" / "MAIN").iterdir()
+    )
+    assert seeds == [0, 1, 2]
+
+
+def test_modes_and_gates(tmp_path: Path, repo_root: Path) -> None:
+    job = load_jobs(repo_root)["JOB-02"]
+    with pytest.raises(ResearchGateError):  # real mode: train_main is not authorized now
+        run_training_job(
+            repo_root,
             job,
-            runner=lambda c, e: 0,
-            allow_restart=True,
-            **{**kw, "split_sha256": "c" * 64},
+            runner=lambda c, e: pytest.fail("must not run"),  # type: ignore[arg-type]
+            **_kw(tmp_path, synthetic_test_mode=False),
         )
+    with pytest.raises(ProvenanceError, match="SYNTHETIC_TEST_DATA in this mode"):
+        run_training_job(  # synthetic test mode never accepts a real dataset record
+            repo_root,
+            job,
+            **_kw(tmp_path, dataset_provenance=_prov(tmp_path, "REAL_RESEARCH_DATA")),
+        )
+    with pytest.raises(ProvenanceError, match="outside the repository"):
+        run_training_job(repo_root, job, **_kw(tmp_path, results_root=repo_root / "x"))
     with pytest.raises(ProvenanceError, match="SHA-256"):
-        run_training_job(REPO_ROOT, job, **{**kw, "manifest_sha256": "abc"})
+        run_training_job(repo_root, job, **_kw(tmp_path, manifest_sha256="abc"))
+    assert not (repo_root / "x").exists()
 
 
 # ================================================================ re-acquisition check
@@ -333,10 +417,33 @@ def test_notebooks_are_generated_and_safe() -> None:
             assert bad not in text.lower(), (name, bad)
         hosts = set(re.findall(r"https://([a-z0-9.-]+)", text))
         assert hosts <= {"www.cancerimagingarchive.net"}, (name, hosts)
+    assert sorted(p.name for p in kdir.glob("*.ipynb")) == sorted(gen.NOTEBOOKS)
+    assert sorted(gen.NOTEBOOKS) == [
+        "00_environment_probe.ipynb",
+        "01_data_access_and_b2.ipynb",
+        "02_grouping_and_split.ipynb",
+        "03_compute_pilot.ipynb",
+        "04_training_job.ipynb",
+        "05_evaluation_job.ipynb",
+        "06_results_export.ipynb",
+    ]
     probe_nb = json.loads((kdir / "00_environment_probe.ipynb").read_text(encoding="utf-8"))
     code = "\n".join(c["source"] for c in probe_nb["cells"] if c["cell_type"] == "code")
     for downloading in ("acquire", "urlretrieve", "RECEIVE_CMD", "--execute", "packages receive"):
         assert downloading not in code, downloading  # the probe notebook transfers no data
+    gates = {
+        "01_data_access_and_b2.ipynb": "acquire_data",
+        "02_grouping_and_split.ipynb": "compute_t_screen",
+        "03_compute_pilot.ipynb": "run_exp001",
+        "04_training_job.ipynb": "train_main",
+        "05_evaluation_job.ipynb": "evaluate_internal_test",
+    }
+    for name, action in gates.items():
+        cells = json.loads((kdir / name).read_text(encoding="utf-8"))["cells"]
+        code_cells = [c["source"] for c in cells if c["cell_type"] == "code"]
+        # the gate check runs right after parameters + setup, before any other step
+        assert f'"check-action", "{action}"' in code_cells[2], name
+        assert "assert r.returncode == 0" in code_cells[2], name
 
 
 def test_amendment_list_excludes_administrative_entries(repo_root: Path) -> None:

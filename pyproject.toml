@@ -42,6 +42,7 @@ dev = [
   "types-PyYAML",
   "build>=1.2",
   "openpyxl>=3.1",   # tests exercise the real .xlsx crosswalk reader on synthetic workbooks
+  "nibabel>=5.2",    # tests exercise the nnU-Net dataset writer on synthetic NIfTI volumes
 ]
 
 [project.scripts]

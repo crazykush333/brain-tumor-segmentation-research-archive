@@ -248,13 +248,70 @@ def _cmd_job_run(root: Path, args: argparse.Namespace) -> int:
         job,
         dataset_id=args.dataset_id,
         results_root=Path(args.results_root),
-        state_root=Path(args.state_root),
+        dataset_provenance=Path(args.dataset_provenance),
         manifest_sha256=args.manifest_sha256,
         split_sha256=args.split_sha256,
-        allow_restart=args.restart_without_checkpoint,
+        resume=args.resume,
+        restart_without_checkpoint=args.restart_without_checkpoint,
     )
     print(f"{args.job}: {record['status']} after {len(record['attempts'])} attempt(s)")
     return 0 if record["status"] == "COMPLETED" else 1
+
+
+def _cmd_job_invalidate(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.compute.jobs import invalidate_run
+
+    m = invalidate_run(Path(args.run_dir), args.reason)
+    print(f"{Path(args.run_dir).name}: {m['status']} ({m['invalidation_reason']})")
+    return 0
+
+
+def _cmd_export_artifacts(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.results.export import export_public_artifacts
+
+    rep = export_public_artifacts(Path(args.source), Path(args.dest))
+    print(f"copied {len(rep.copied)} public-safe file(s); skipped {len(rep.skipped)}")
+    for s in rep.skipped:
+        print(f"  skipped (never copied): {s}")
+    return 0
+
+
+def _cmd_validate_metrics(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.results.metric_records import validate_metric_file
+
+    for f in args.files:
+        recs = validate_metric_file(Path(f))
+        print(f"{f}: {len(recs)} valid metric record(s)")
+    return 0
+
+
+def _cmd_build_nnunet_dataset(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.data.nnunet_dataset import write_nnunet_dataset
+    from brats_uncertainty.data.schema import load_schema
+
+    case_ids = None
+    if args.case_ids:
+        case_ids = [
+            ln.strip()
+            for ln in Path(args.case_ids).read_text(encoding="utf-8").splitlines()
+            if ln.strip()
+        ]
+    res = write_nnunet_dataset(
+        root,
+        Path(args.training_root),
+        load_schema(Path(args.dataset_config)),
+        Path(args.out),
+        dataset_id=args.dataset_id,
+        dataset_name=args.dataset_name,
+        case_ids=case_ids,
+        gate_action=args.gate_action,
+        training_root_reference=args.training_root_reference,
+    )
+    print(
+        f"nnU-Net raw dataset: {res.n_cases} cases; provenance sha256={res.provenance_sha256}; "
+        f"conversion config sha256={res.conversion_config_sha256}"
+    )
+    return 0
 
 
 def _cmd_verify_inventory(root: Path, args: argparse.Namespace) -> int:
@@ -454,16 +511,51 @@ def build_parser() -> argparse.ArgumentParser:
     jr = sub.add_parser("job-run", help="run/resume one training job (gated: train_main)")
     jr.add_argument("job", help="JOB-02 ... JOB-07")
     jr.add_argument("--dataset-id", type=int, required=True, help="nnU-Net dataset id")
-    jr.add_argument("--results-root", required=True, help="per-run nnUNet_results parent")
-    jr.add_argument("--state-root", required=True, help="where run records are kept")
+    jr.add_argument(
+        "--results-root", required=True, help="parent of <experiment>/arm_<a>_seed_<s> run dirs"
+    )
+    jr.add_argument(
+        "--dataset-provenance", required=True, help="conversion_provenance.json of the dataset"
+    )
     jr.add_argument("--manifest-sha256", required=True, help="B5 manifest_sha256")
     jr.add_argument("--split-sha256", required=True, help="B12 split hash")
+    jr.add_argument(
+        "--resume",
+        action="store_true",
+        help="continue an earlier attempt from its own verified latest checkpoint",
+    )
     jr.add_argument(
         "--restart-without-checkpoint",
         action="store_true",
         help="explicitly restart an earlier attempt that left no checkpoint (recorded)",
     )
     jr.set_defaults(func=_cmd_job_run)
+    ji = sub.add_parser("job-invalidate", help="mark a run INVALIDATED (never resumed again)")
+    ji.add_argument("run_dir")
+    ji.add_argument("--reason", required=True)
+    ji.set_defaults(func=_cmd_job_invalidate)
+    nd = sub.add_parser(
+        "build-nnunet-dataset",
+        help="official nested BraTS tree -> nnU-Net raw dataset + provenance (gated)",
+    )
+    nd.add_argument("--training-root", required=True, help=".../BraTS2021_TrainingSet")
+    nd.add_argument("--dataset-config", default="configs/dataset/brats2021.yaml")
+    nd.add_argument("--out", required=True, help="nnUNet_raw/Dataset<ID>_<Name> (must not exist)")
+    nd.add_argument("--dataset-id", type=int, required=True)
+    nd.add_argument("--dataset-name", required=True)
+    nd.add_argument("--case-ids", default=None, help="file with one case ID per line (split)")
+    nd.add_argument("--gate-action", default="train_main", choices=["train_main", "run_exp001"])
+    nd.add_argument("--training-root-reference", default=None, help="logical source reference")
+    nd.set_defaults(func=_cmd_build_nnunet_dataset)
+    ea = sub.add_parser(
+        "export-artifacts", help="copy public-safe artifacts (never data/checkpoints) to a folder"
+    )
+    ea.add_argument("--source", required=True, help="remote export folder")
+    ea.add_argument("--dest", required=True, help="destination, e.g. results/<EXPERIMENT>")
+    ea.set_defaults(func=_cmd_export_artifacts)
+    vm = sub.add_parser("validate-metrics", help="validate *.metrics.json result files")
+    vm.add_argument("files", nargs="+")
+    vm.set_defaults(func=_cmd_validate_metrics)
     vi = sub.add_parser(
         "verify-inventory", help="check a (re-)acquired tree against the committed B2 inventory"
     )

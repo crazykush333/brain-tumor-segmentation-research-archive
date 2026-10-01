@@ -37,6 +37,31 @@ def write_case(case_dir: Path, case_id: str, suffixes: Sequence[str] = SUFFIXES)
         write_nifti_header_file(case_dir / f"{case_id}{s}.nii.gz", (4, 4, 3))
 
 
+def write_volume_case(case_dir: Path, case_id: str, seed: int, shape=(6, 5, 4)) -> None:  # type: ignore[no-untyped-def]
+    """SYNTHETIC case with real voxel data (needs nibabel): 4 float channels + a BraTS-style
+    label with values {0, 1, 2, 4}. Deterministic per seed; never real data."""
+    import gzip
+    import io
+
+    import nibabel as nib
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    case_dir.mkdir(parents=True, exist_ok=True)
+    affine = np.eye(4)
+
+    def save(arr, name: str) -> None:  # type: ignore[no-untyped-def]
+        buf = io.BytesIO()
+        with gzip.GzipFile(filename="", mode="wb", fileobj=buf, mtime=0) as gz:
+            gz.write(nib.Nifti1Image(arr, affine).to_bytes())
+        (case_dir / name).write_bytes(buf.getvalue())
+
+    for i, s in enumerate(("_t1", "_t1ce", "_t2", "_flair")):
+        save(rng.normal(size=shape).astype(np.float32) + i, f"{case_id}{s}.nii.gz")
+    label = rng.choice(np.array([0, 1, 2, 4], dtype=np.int16), size=shape)
+    save(label, f"{case_id}_seg.nii.gz")
+
+
 def make_nested_training_tree(
     root: Path, tree: Mapping[str, Sequence[str]] = DEFAULT_TREE, *, reverse: bool = False
 ) -> Path:

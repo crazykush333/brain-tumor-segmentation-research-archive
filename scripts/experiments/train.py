@@ -13,7 +13,13 @@ import subprocess
 import sys
 
 from brats_uncertainty.evaluation.guards import require_action
-from brats_uncertainty.models.nnunet import RunSpec, train_command, train_environment
+from brats_uncertainty.models.nnunet import (
+    MAIN_EXPERIMENT_ID,
+    RunSpec,
+    run_namespace,
+    train_command,
+    train_environment,
+)
 from brats_uncertainty.utils.paths import find_repo_root
 
 
@@ -30,7 +36,8 @@ def main() -> int:
     require_action("train_main", find_repo_root())
     run = RunSpec(a.arm, a.seed)
     # per-run results root: the three seeds of an arm must not share one nnUNet_results
-    cmd, env = train_command(a.dataset_id, run), train_environment(run, a.results_root)
+    run_dir = run_namespace(a.results_root, MAIN_EXPERIMENT_ID, run)
+    cmd, env = train_command(a.dataset_id, run), train_environment(run, run_dir)
     # resumable, recorded execution: `brats-uncertainty job-run JOB-0x ...` (compute.jobs)
     print(" ".join(cmd), env)
     if not a.execute:

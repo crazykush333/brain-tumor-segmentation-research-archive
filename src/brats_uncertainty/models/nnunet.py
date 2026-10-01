@@ -22,6 +22,7 @@ The exact nnU-Net version is pinned at M1/EXP-001; the trainer glue in
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -127,21 +128,36 @@ def train_command(dataset_id: int, run: RunSpec, *, resume: bool = False) -> lis
     return [*cmd, "--c"] if resume else cmd
 
 
-def run_results_dir(results_root: str | Path, run: RunSpec) -> Path:
-    """Per-run ``nnUNet_results`` folder.
+MAIN_EXPERIMENT_ID = "MAIN"  # the six protocol training runs (§9-§10); the pilot is EXP-001
+_EXPERIMENT_ID = re.compile(r"^[A-Z][A-Z0-9-]{1,31}$")
+_RUN_LABEL = re.compile(r"^[A-Za-z0-9]{1,16}$")
+
+
+def run_namespace(
+    results_root: str | Path, experiment_id: str, run: RunSpec, label: str | None = None
+) -> Path:
+    """Collision-free per-run ``nnUNet_results`` root.
+
+    Layout: ``<root>/<experiment>/[<label>_]arm_<a>_seed_<s>``.
 
     nnU-Net derives its output folder from dataset/trainer/plans/configuration/fold
     only, so the three seeds of one arm would overwrite each other in a shared
-    ``nnUNet_results``. Each run therefore gets its own root.
+    ``nnUNet_results``; different experiments (EXP-001 pilot vs MAIN) likewise.
+    Each run therefore gets its own root.
     """
-    return Path(results_root) / run.run_id
+    if not _EXPERIMENT_ID.match(experiment_id):
+        raise ValueError(f"invalid experiment_id {experiment_id!r}")
+    if label is not None and not _RUN_LABEL.match(label):
+        raise ValueError(f"invalid run label {label!r}")
+    leaf = f"arm_{run.arm.lower()}_seed_{run.seed}"
+    return Path(results_root) / experiment_id / (f"{label}_{leaf}" if label else leaf)
 
 
-def train_environment(run: RunSpec, results_root: str | Path | None = None) -> dict[str, str]:
+def train_environment(run: RunSpec, run_dir: str | Path | None = None) -> dict[str, str]:
     """Environment variables consumed by the guarded trainers (and nnU-Net's results root)."""
     env = {"BRATS_UNC_SEED": str(run.seed), "BRATS_UNC_ARM": run.arm}
-    if results_root is not None:
-        env["nnUNet_results"] = str(run_results_dir(results_root, run))
+    if run_dir is not None:
+        env["nnUNet_results"] = str(run_dir)
     return env
 
 

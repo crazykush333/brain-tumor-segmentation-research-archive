@@ -49,21 +49,38 @@ environments:
     forbidden: ["public buckets", "sharing links to raw data"]
 
 # One job = one resumable unit of work. Gates are checked by the runner/CLI, never bypassed.
+# experiment_id is the top level of the run namespace (models.nnunet.run_namespace).
 jobs:
   JOB-01:
     kind: b2_acquisition
-    description: "official TCIA transfer test, provider checksums, B2 local import + inventory"
+    experiment_id: B2
+    description: "official TCIA transfer (or manual official delivery), provider checksums, B2 local import + inventory"
     gated_action: acquire_data
     needs_gpu: false
     estimate_min_free_disk_gib: 45   # ESTIMATE: 2 x selection + margin; replaced by storage-preflight
-  JOB-02: {kind: training, arm: A, seed: 0, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
-  JOB-03: {kind: training, arm: A, seed: 1, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
-  JOB-04: {kind: training, arm: A, seed: 2, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
-  JOB-05: {kind: training, arm: B, seed: 0, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
-  JOB-06: {kind: training, arm: B, seed: 1, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
-  JOB-07: {kind: training, arm: B, seed: 2, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
+  JOB-GROUPING:
+    kind: grouping_and_split
+    experiment_id: B7-B12
+    description: "T_screen, pairwise screen, (human) B8 review, groups, final split - after B6 only"
+    gated_action: compute_t_screen
+    needs_gpu: false
+    estimate_min_free_disk_gib: 45
+  JOB-PILOT:
+    kind: compute_pilot
+    experiment_id: EXP-001
+    description: "EXP-001 compute pilot (D gates); no label-based scientific metrics"
+    gated_action: run_exp001
+    needs_gpu: true
+    estimate_min_free_disk_gib: 70
+  JOB-02: {kind: training, experiment_id: MAIN, arm: A, seed: 0, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
+  JOB-03: {kind: training, experiment_id: MAIN, arm: A, seed: 1, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
+  JOB-04: {kind: training, experiment_id: MAIN, arm: A, seed: 2, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
+  JOB-05: {kind: training, experiment_id: MAIN, arm: B, seed: 0, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
+  JOB-06: {kind: training, experiment_id: MAIN, arm: B, seed: 1, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
+  JOB-07: {kind: training, experiment_id: MAIN, arm: B, seed: 2, gated_action: train_main, needs_gpu: true, estimate_min_free_disk_gib: 70}
   JOB-08:
     kind: evaluation
+    experiment_id: EVAL
     description: "internal validation/test inference, thresholds (C5), external evaluation, statistics, figures"
     gated_action: infer_validation
     needs_gpu: true

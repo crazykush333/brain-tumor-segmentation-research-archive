@@ -1,6 +1,8 @@
 # B2 official download runbook (manual steps for the owner)
 
-**Status: B2 is AUTHORIZED (ready) and has not been executed. No data have been downloaded.** These steps are performed manually by the project owner. Claude Code does not install software, download the dataset, or handle credentials.
+**Status: B2 is AUTHORIZED (ready) and has not been executed. No data have been downloaded.**
+
+The owner's local Windows machine cannot run the study, so B2 is performed in a private remote GPU environment that receives the data directly from TCIA. There are two paths: runtime acquisition with a command confirmed in the session (notebook 00), or manual official delivery on a private VM. Both are described in [REMOTE_COMPUTE.md](../reproducibility/REMOTE_COMPUTE.md) §4 and run through notebook `experiments/kaggle/01_data_access_and_b2.ipynb` or the same CLI steps on a VM. The steps below are the manual path. These steps are performed manually by the project owner. Claude Code does not install software, download the dataset, or handle credentials.
 
 | Item | Value |
 |---|---|

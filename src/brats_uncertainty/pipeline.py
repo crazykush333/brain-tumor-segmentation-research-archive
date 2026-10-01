@@ -45,7 +45,8 @@ def load_label(path: Path) -> NDArray[np.integer]:
         raise ImportError(
             "install the optional extra: pip install 'brats-uncertainty[io]'"
         ) from exc
-    return np.asarray(nib.load(str(path)).dataobj).astype(np.int16)
+    img: Any = nib.load(str(path))  # nibabel types load() too narrowly
+    return np.asarray(img.dataobj).astype(np.int16)
 
 
 def wt_mask(label: NDArray[np.integer]) -> NDArray[np.bool_]:
