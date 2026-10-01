@@ -52,7 +52,12 @@ from brats_uncertainty.data.synthetic import (
     generate_synthetic_dataset,
     require_synthetic,
 )
-from brats_uncertainty.errors import DataValidationError, ProvenanceError, ResearchGateError
+from brats_uncertainty.errors import (
+    ConfigError,
+    DataValidationError,
+    ProvenanceError,
+    ResearchGateError,
+)
 from brats_uncertainty.evaluation.guards import ACQUISITION_LOCKED_MESSAGE, require_action
 from brats_uncertainty.evaluation.status import load_status
 from brats_uncertainty.utils.logging import get_logger, log_event
@@ -271,8 +276,11 @@ def _storage_label(storage_root: Path, repo_root: Path, label: str | None) -> st
 
 def assert_real_acquisition_authorized(repo_root: Path, adapter: AcquisitionAdapter) -> None:
     """Fail closed unless B1 PASSED, B2 runnable, authorization APPROVED and route matches."""
-    require_action("acquire_data", repo_root)  # raises with ACQUISITION_LOCKED_MESSAGE
-    data = load_status(repo_root).raw["data"]
+    try:
+        require_action("acquire_data", repo_root)  # raises with ACQUISITION_LOCKED_MESSAGE
+        data = load_status(repo_root).raw["data"]
+    except ConfigError as exc:  # invalid status or evidence (e.g. synthetic B1): fail closed
+        raise ResearchGateError(f"{ACQUISITION_LOCKED_MESSAGE} {exc}") from exc
     if data.get("authorization") != "APPROVED" or not data.get("approved_route"):
         raise ResearchGateError(ACQUISITION_LOCKED_MESSAGE)
     if adapter.source.route != data["approved_route"]:

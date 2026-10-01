@@ -11,8 +11,9 @@
   },
   "data": {
     "acquired": false,
-    "approved_route": null,
-    "authorization": "PENDING",
+    "approved_route": "Direct official TCIA access into a private, access-restricted computational environment",
+    "authorization": "APPROVED",
+    "authorization_basis": "OWNER_APPROVED_ALTERNATIVE",
     "inquiry_sent": false,
     "statement": "No study imaging or label-volume data have been downloaded."
   },
@@ -87,17 +88,17 @@
       "title": "Owner approval; protocol frozen as v1.0 and tagged protocol-v1.0"
     },
     {
-      "closed_on": null,
+      "closed_on": "2026-10-01",
       "group": "B",
       "id": "B1",
-      "status": "PENDING",
-      "title": "Approved data route (recorded external written authorization from TCIA)"
+      "status": "PASSED",
+      "title": "Approved data route (TCIA written authorization or owner-approved alternative; §5.1, SR7, amendment v1.0-A1)"
     },
     {
       "closed_on": null,
       "group": "B",
       "id": "B2",
-      "status": "LOCKED",
+      "status": "AUTHORIZED",
       "title": "Official data acquired via the approved route"
     },
     {
@@ -258,8 +259,8 @@
   "headline": "Protocol v1.0 frozen. Experimental execution pending.",
   "last_updated": "2026-09-30",
   "next_step": {
-    "description": "Send the prepared TCIA inquiry (docs/data/TCIA_DATA_ROUTE_INQUIRY.md) manually and record the written reply with docs/data/B1_EVIDENCE_TEMPLATE.md. B1 passes only on recorded external written authorization (protocol §5.1, SR7). No data acquisition or compute may begin before B1 has passed.",
-    "gate": "B1"
+    "description": "Controlled B2 real-data acquisition through the owner-approved route (direct official TCIA access into a private, access-restricted computational environment; amendment v1.0-A1). B2 is authorized but has not been executed; no data have been acquired. B3-B12 remain locked until their prerequisites pass in order.",
+    "gate": "B2"
   },
   "overview": [
     {
@@ -275,21 +276,22 @@
       "status": "PREPARED"
     },
     {
-      "detail": "recorded external written authorization (TCIA) required before any data acquisition",
+      "detail": "owner-approved alternative permitted by the frozen B1 wording (amendment v1.0-A1); no external TCIA authorization is claimed. Route: Direct official TCIA access into a private, access-restricted computational environment",
       "key": "b1",
-      "label": "B1 Data-route authorization",
-      "status": "PENDING"
+      "label": "B1 Data route",
+      "status": "ROUTE_AUTHORIZED",
+      "status_label": "Authorized — Owner-approved alternative"
     },
     {
       "detail": "official files via the B1-approved route; inventory hashed",
       "key": "b2",
       "label": "B2 Data acquisition",
-      "status": "LOCKED"
+      "status": "AUTHORIZED"
     },
     {
       "detail": "exact SHA-256 of BraTS2021_MappingToTCIA.xlsx",
       "key": "b3",
-      "label": "B3 Crosswalk hash",
+      "label": "B3 Mapping-file hash",
       "status": "LOCKED"
     },
     {
@@ -301,7 +303,7 @@
     {
       "detail": "integrity audit + hashed manifest",
       "key": "b5",
-      "label": "B5 Raw data manifest",
+      "label": "B5 Data manifest",
       "status": "LOCKED"
     },
     {
@@ -311,15 +313,39 @@
       "status": "LOCKED"
     },
     {
-      "detail": "same-patient screen; locked until B6 has passed",
+      "detail": "T_screen and same-patient screen; after B6 has passed",
       "key": "b7",
       "label": "B7 Patient grouping",
       "status": "LOCKED"
     },
     {
-      "detail": "gates B10-B12; created once",
-      "key": "split",
-      "label": "Final split",
+      "detail": "flagged pairs reviewed",
+      "key": "b8",
+      "label": "B8 Manual review",
+      "status": "LOCKED"
+    },
+    {
+      "detail": "patient groups frozen (IDs only)",
+      "key": "b9",
+      "label": "B9 Patient groups",
+      "status": "LOCKED"
+    },
+    {
+      "detail": "created once",
+      "key": "b10",
+      "label": "B10 Final split",
+      "status": "LOCKED"
+    },
+    {
+      "detail": "split assertions pass",
+      "key": "b11",
+      "label": "B11 Split assertions",
+      "status": "LOCKED"
+    },
+    {
+      "detail": "split hashes recorded",
+      "key": "b12",
+      "label": "B12 Split hashes",
       "status": "LOCKED"
     },
     {
@@ -400,11 +426,6 @@
       "title": "B1 authorization workflow documented; TCIA inquiry prepared (not yet sent); B2-B6 tooling prepared"
     },
     {
-      "date": null,
-      "status": "PENDING",
-      "title": "Gate B1: approved data route"
-    },
-    {
       "date": "2026-09-30",
       "status": "DONE",
       "title": "B2-B6 software (acquisition adapters, hashing, manifests, count verification, gate state machine) implemented; tested on SYNTHETIC_TEST_DATA only"
@@ -415,9 +436,24 @@
       "title": "B1 authorization workflow finalized: TCIA inquiry final (not yet sent), evidence template, external-written-evidence-only rule"
     },
     {
+      "date": "2026-10-01",
+      "status": "DONE",
+      "title": "Protocol amendment v1.0-A1 (DATA-ROUTE / OPERATIONAL): owner-approved B1 data route; scientific impact none"
+    },
+    {
+      "date": "2026-10-01",
+      "status": "DONE",
+      "title": "Gate B1 authorized: owner-approved alternative (external provider authorization: none)"
+    },
+    {
+      "date": null,
+      "status": "PENDING",
+      "title": "Gate B2: data acquisition via the owner-approved route (authorized, not executed)"
+    },
+    {
       "date": null,
       "status": "LOCKED",
-      "title": "Gates B2-B6: data acquisition, hashes, manifest, counts"
+      "title": "Gates B3-B6: metadata hashes, manifest, counts"
     },
     {
       "date": null,

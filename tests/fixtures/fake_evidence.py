@@ -63,6 +63,7 @@ def fake_source() -> SourceInfo:
 
 
 B1_FAKE_FIELDS = {
+    "Source class": "EXTERNAL_PROVIDER_AUTHORIZATION",
     "Protocol version": "v1.0",
     "Dataset": "FAKE",
     "DOI": "10.0000/fake",
@@ -76,6 +77,7 @@ B1_FAKE_FIELDS = {
     "Response date": "2000-01-01",
     "Evidence reference": "FAKE-TICKET-0",
     "Interpretation": "FAKE: the fake route is permitted",
+    "Conditions": "None stated",
     "Restrictions": "None stated",
     "Attribution requirements": "Cite the FAKE DOI",
     "Approved route": FAKE_ROUTE,

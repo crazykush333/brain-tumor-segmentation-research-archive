@@ -10,7 +10,28 @@ from brats_uncertainty.evaluation.lifecycle import B_GATES, unlock_eligible
 from tests.fixtures.fake_evidence import FAKE_ROUTE, build_fake_chain, write_b1_evidence
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-__all__ = ["FAKE_ROUTE", "REPO_ROOT", "make_status_repo", "make_verbatim_status_repo"]
+# Pre-B1 baseline (B1 PENDING, B2-B12 LOCKED; the real status before 2026-10-01) for the fake
+# test repositories, so the transition tests start from PENDING whatever the real state is.
+PENDING_STATUS = REPO_ROOT / "tests/fixtures/project_status_b1_pending.yaml"
+OWNER_ROUTE = (
+    "Direct official TCIA access into a private, access-restricted computational environment"
+)
+
+
+def pending_raw() -> dict:  # type: ignore[type-arg]
+    """The pre-B1 status mapping (validates against the real repository: it has no evidence)."""
+    return yaml.safe_load(PENDING_STATUS.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+
+
+__all__ = [
+    "FAKE_ROUTE",
+    "OWNER_ROUTE",
+    "PENDING_STATUS",
+    "REPO_ROOT",
+    "make_status_repo",
+    "make_verbatim_status_repo",
+    "pending_raw",
+]
 
 
 @pytest.fixture(scope="session")
@@ -54,7 +75,7 @@ def make_status_repo(tmp_path: Path, closed: set[str]) -> Path:
     linked, schema-valid FAKE evidence chain (tests/fixtures/fake_evidence.py);
     other gates get a placeholder document. Newly eligible B gates are unlocked.
     """
-    raw = yaml.safe_load((REPO_ROOT / "docs/project_status.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load(PENDING_STATUS.read_text(encoding="utf-8"))
     _copy_basics(tmp_path)
     chain = build_fake_chain(tmp_path) if closed & {"B2", "B3", "B4", "B5", "B6"} else {}
     for g in raw["gates"]:
@@ -80,7 +101,7 @@ def make_status_repo(tmp_path: Path, closed: set[str]) -> Path:
 
 
 def make_verbatim_status_repo(tmp_path: Path) -> Path:
-    """Fake repository with a byte-identical copy of the real status file (for line-edit tests)."""
+    """Fake repository with a byte-identical copy of the pre-B1 status file (line-edit tests)."""
     _copy_basics(tmp_path)
-    shutil.copy(REPO_ROOT / "docs/project_status.yaml", tmp_path / "docs/project_status.yaml")
+    shutil.copy(PENDING_STATUS, tmp_path / "docs/project_status.yaml")
     return tmp_path

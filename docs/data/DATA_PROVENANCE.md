@@ -1,6 +1,6 @@
 # Data provenance and the B2–B6 reproducibility chain
 
-**Status (2026-09-30): no real provenance records exist, because no data have been acquired (B1 PENDING; B2–B6 LOCKED).** Every hash, count and ID list is computed by code from the actual files at the stated gate. None is typed by hand.
+**Status (2026-10-01): no real provenance records exist, because no data have been acquired. B1 is AUTHORIZED through the owner-approved alternative (amendment v1.0-A1; external provider authorization NONE). B2 is AUTHORIZED (ready, not executed). B3–B12 are LOCKED.** Every hash, count and ID list is computed by code from the actual files at the stated gate. None is typed by hand.
 
 ## 1. Four zones
 
@@ -110,7 +110,8 @@ Synthetic data are never BraTS, never results and can never close a gate.
 
 | Gate | State | Record |
 |---|---|---|
-| B1 | PENDING | [B1_DATA_ROUTE_AUTHORIZATION.md](B1_DATA_ROUTE_AUTHORIZATION.md) |
-| B2–B6 | LOCKED | none |
+| B1 | PASSED (Authorized: owner-approved alternative, 2026-10-01) | [B1_EVIDENCE_2026-10-01.md](B1_EVIDENCE_2026-10-01.md); [B1_DATA_ROUTE_AUTHORIZATION.md](B1_DATA_ROUTE_AUTHORIZATION.md) |
+| B2 | AUTHORIZED (ready, not executed) | none |
+| B3–B6 | LOCKED | none |
 | B6 counts | EXPECTED_BY_PROTOCOL (targets only) | none |
 | B7–B12 | LOCKED | none |

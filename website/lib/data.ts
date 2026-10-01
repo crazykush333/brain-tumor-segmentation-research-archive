@@ -40,7 +40,17 @@ export interface OverviewItem {
   key: string;
   label: string;
   status: string;
+  /** Exporter-provided label overriding the generic status label (e.g. the B1 basis). */
+  status_label?: string;
   detail: string;
+}
+
+export interface Amendment {
+  id: string;
+  type: string;
+  date: string;
+  title: string;
+  file: string;
 }
 
 export interface Status {
@@ -73,6 +83,8 @@ export interface Status {
     acquired: boolean;
     inquiry_sent: boolean;
     statement: string;
+    /** Source class of the B1 evidence once B1 has passed; null before. */
+    authorization_basis: string | null;
   };
   project: {
     title: string;
@@ -107,6 +119,7 @@ export interface Protocol {
   sha256: string;
   git_tag: string;
   frozen_on: string;
+  amendments: Amendment[];
   parameters: Params;
 }
 

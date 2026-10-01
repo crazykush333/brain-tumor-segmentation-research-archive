@@ -12,3 +12,9 @@ Everything in this directory is **synthetic**. It is generated in memory by
   time in memory or in pytest's temporary directories.
 - Synthetic numbers produced by tests are **never** results. They must not be
   written to `results/`, exported to the website or reported anywhere.
+- `synthetic_b1/SYNTHETIC_TEST_ONLY_B1_AUTHORIZATION.md` is a **synthetic** provider
+  response (source class `SYNTHETIC_TEST_AUTHORIZATION`), **not** an actual TCIA
+  response. It drives the B1 parser and the test-only state
+  `SYNTHETIC_TEST_B1: PENDING -> TEST_AUTHORIZED` (`data/synthetic_b1.py`). The real
+  gate B1, real acquisition and the repository scan all refuse it. Never copy it to
+  `docs/data/B1_EVIDENCE_<date>.md`.

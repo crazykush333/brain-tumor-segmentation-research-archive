@@ -46,7 +46,28 @@ export default function ProtocolPage() {
       </p>
 
       <h2>Amendments</h2>
-      <p>None.</p>
+      {protocol.amendments.length === 0 ? (
+        <p>None.</p>
+      ) : (
+        <ul>
+          {protocol.amendments.map((a) => {
+            const href = sourceLink(a.file);
+            return (
+              <li key={a.id}>
+                <strong>{a.id}</strong> ({a.date}, {a.type}):{" "}
+                {href ? (
+                  <a href={href} className="text-blue-700 underline dark:text-blue-400">
+                    {a.title}
+                  </a>
+                ) : (
+                  a.title
+                )}
+                . The frozen v1.0 text and its tag are unchanged.
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <h2>Stage overview</h2>
       <StageOverview />

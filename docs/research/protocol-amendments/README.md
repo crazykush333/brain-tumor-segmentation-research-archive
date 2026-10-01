@@ -1,6 +1,15 @@
 # Protocol amendments and administrative entries
 
-**There are no amendments to protocol v1.0.**
+**Protocol v1.0 has one logged amendment: v1.0-A1.** The frozen v1.0 text and the `protocol-v1.0` tag are unchanged.
+
+**v1.0-A1 — 2026-10-01 — DATA-ROUTE / OPERATIONAL.** Owner-approved direct official TCIA access into a private, access-restricted computational environment.
+
+- External provider authorization: **NONE**.
+- TCIA response: **NONE**.
+- This is the owner-approved alternative already permitted by gate B1 ("TCIA confirmation on private third-party re-hosting (or an owner-approved alternative), per §5.1 and SR7").
+- Scientific impact: none.
+- Methodological impact: none.
+- Not authorized: third-party re-hosting, Kaggle mirroring and public redistribution.
 
 Rules (protocol v1.0, "Freeze rule" and §25):
 
@@ -11,4 +20,4 @@ Rules (protocol v1.0, "Freeze rule" and §25):
 
 | Date | Type | Gate / sections | File | Test data seen? |
 |---|---|---|---|---|
-| — | — | — | *(none)* | — |
+| 2026-10-01 | Amendment v1.0-A1 (DATA-ROUTE / OPERATIONAL) | B1; §5.1 operational data route; SR7 | [2026-10-01_B1_data-route.md](2026-10-01_B1_data-route.md) | No |

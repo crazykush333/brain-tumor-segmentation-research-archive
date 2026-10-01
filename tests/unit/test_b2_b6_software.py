@@ -82,8 +82,10 @@ from brats_uncertainty.results.site_export import build_overview
 from brats_uncertainty.utils.hashing import sha256_file
 from tests.conftest import (
     FAKE_ROUTE,
+    OWNER_ROUTE,
     make_status_repo,
     make_verbatim_status_repo,
+    pending_raw,
 )
 from tests.fixtures.fake_evidence import fake_stamp, write_b1_evidence, write_record_copy
 
@@ -133,13 +135,14 @@ def _acquire_synthetic(repo_root: Path, tmp_path: Path, **kw: object) -> Acquisi
 
 
 # =========================================================== 1. acquisition denied without B1
-def test_real_acquisition_denied_in_current_repository(repo_root: Path, tmp_path: Path) -> None:
+def test_real_acquisition_denied_before_b1(tmp_path: Path) -> None:
+    pending = make_verbatim_status_repo(tmp_path / "pending")  # pre-B1 baseline
     delivered = tmp_path / "delivered.bin"
     delivered.write_bytes(b"synthetic stand-in")
     adapter = LocalImportAdapter(_src("any route"), delivered)
     with pytest.raises(ResearchGateError, match="Real-data acquisition is locked"):
         stage_acquire(
-            repo_root,
+            pending,
             adapter,
             storage_root=tmp_path / "store",
             out_record=tmp_path / "B2.json",
@@ -149,6 +152,21 @@ def test_real_acquisition_denied_in_current_repository(repo_root: Path, tmp_path
     assert not (tmp_path / "store").exists()
     assert not (tmp_path / "B2.json").exists()
     assert ACQUISITION_LOCKED_MESSAGE.startswith("Real-data acquisition is locked")
+
+
+def test_real_repository_acquisition_requires_the_owner_approved_route(
+    repo_root: Path, tmp_path: Path
+) -> None:
+    """Real state (B1 owner-approved, B2 ready): any other route is refused; nothing written."""
+    delivered = tmp_path / "delivered.bin"
+    delivered.write_bytes(b"synthetic stand-in")
+    for route in ("any route", "Private Kaggle dataset mirror", FAKE_ROUTE):
+        with pytest.raises(ResearchGateError, match="not the B1-approved route"):
+            LocalImportAdapter(_src(route), delivered).execute(
+                tmp_path / "store", repo_root=repo_root
+            )
+    assert not (tmp_path / "store").exists()
+    assert load_status(repo_root).raw["data"]["approved_route"] == OWNER_ROUTE
 
 
 def test_real_acquisition_requires_approved_route_and_b2_authorized(tmp_path: Path) -> None:
@@ -677,7 +695,7 @@ def test_b7_locked_before_b6(repo_root: Path, tmp_path: Path) -> None:
 
 # =========================================================== 13. transitions
 def test_invalid_transitions_rejected(repo_root: Path) -> None:
-    raw = load_status(repo_root).raw
+    raw = pending_raw()  # pre-B1 baseline
     for gid, new, kw, msg in [
         ("B2", "PASSED", {}, "illegal transition"),  # LOCKED -> PASSED
         ("B2", "AUTHORIZED", {}, "prerequisites"),  # B1 not passed
@@ -692,6 +710,10 @@ def test_invalid_transitions_rejected(repo_root: Path) -> None:
         check_invariants({"B1": "PENDING", "B2": "AUTHORIZED"})
     with pytest.raises(ConfigError, match="LOCKED although"):
         check_invariants({"B1": "PASSED", "B2": "LOCKED"})
+    real = load_status(repo_root).raw  # B1 PASSED is terminal; B2 may not skip RUNNING
+    for gid, new in (("B1", "PENDING"), ("B1", "PASSED"), ("B2", "PASSED"), ("B3", "AUTHORIZED")):
+        with pytest.raises(ConfigError):
+            apply_transition(real, gid, new, evidence="x", on="2000-01-01")
 
 
 def test_b1_pass_unlocks_only_b2_and_records_route(tmp_path: Path) -> None:
@@ -863,13 +885,14 @@ def test_real_mode_stages_blocked_in_current_repository(repo_root: Path, tmp_pat
 
 
 # =========================================================== status and website consistency
-def test_current_status_is_b1_pending_and_b2_to_b12_locked(repo_root: Path) -> None:
+def test_current_status_is_b1_owner_approved_b2_ready_b3_to_b12_locked(repo_root: Path) -> None:
     st = load_status(repo_root)
-    assert st.gate("B1").status == "PENDING"
-    for i in range(2, 13):
+    assert st.gate("B1").status == "PASSED"
+    assert st.gate("B2").status == "AUTHORIZED"
+    for i in range(3, 13):
         assert st.gate(f"B{i}").status == "LOCKED", i
-    assert st.raw["data"]["authorization"] == "PENDING"
-    assert st.raw["data"]["approved_route"] is None
+    assert st.raw["data"]["authorization"] == "APPROVED"
+    assert st.raw["data"]["approved_route"] == OWNER_ROUTE
     assert st.raw["data"]["acquired"] is False
     raw = st.raw
     ov = {
@@ -879,14 +902,18 @@ def test_current_status_is_b1_pending_and_b2_to_b12_locked(repo_root: Path) -> N
     assert ov == {
         "protocol": "FROZEN",
         "route_docs": "PREPARED",
-        "b1": "PENDING",
-        "b2": "LOCKED",
+        "b1": "ROUTE_AUTHORIZED",
+        "b2": "AUTHORIZED",
         "b3": "LOCKED",
         "b4": "LOCKED",
         "b5": "LOCKED",
         "b6": "LOCKED",
         "b7": "LOCKED",
-        "split": "LOCKED",
+        "b8": "LOCKED",
+        "b9": "LOCKED",
+        "b10": "LOCKED",
+        "b11": "LOCKED",
+        "b12": "LOCKED",
         "training": "NOT_STARTED",
         "evaluation": "NOT_STARTED",
         "results": "NOT_AVAILABLE",
@@ -894,7 +921,18 @@ def test_current_status_is_b1_pending_and_b2_to_b12_locked(repo_root: Path) -> N
 
 
 def test_status_section_consistency(repo_root: Path) -> None:
-    base = load_status(repo_root).raw
+    real = load_status(repo_root).raw  # B1 PASSED: authorization and route must stay consistent
+    for mutate, msg in [
+        (lambda r: r["data"].update(authorization="PENDING"), "APPROVED exactly"),
+        (lambda r: r["data"].update(approved_route=None), "must name the route"),
+        (lambda r: r["data"].update(approved_route="Private Kaggle mirror"), "Approved route"),
+        (lambda r: r["data"].update(acquired=True), "acquired"),
+    ]:
+        raw = json.loads(json.dumps(real))
+        mutate(raw)
+        with pytest.raises(ConfigError, match=msg):
+            validate_status(raw, repo_root)
+    base = pending_raw()
     for mutate, msg in [
         (
             lambda r: r["data"].update(authorization="APPROVED", approved_route="x"),

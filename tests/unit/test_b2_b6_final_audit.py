@@ -59,7 +59,12 @@ from brats_uncertainty.results.site_export import build_count_block, count_verif
 from brats_uncertainty.utils.hashing import sha256_bytes, sha256_file
 from brats_uncertainty.utils.io import write_json
 from brats_uncertainty.utils.paths import is_link
-from tests.conftest import FAKE_ROUTE, make_status_repo, make_verbatim_status_repo
+from tests.conftest import (
+    FAKE_ROUTE,
+    make_status_repo,
+    make_verbatim_status_repo,
+    pending_raw,
+)
 from tests.fixtures.fake_evidence import (
     FAKE_SCHEMA,
     PROTOCOL_SHA,
@@ -259,7 +264,7 @@ def test_evidence_must_be_committed_and_from_current_history(tmp_path: Path) -> 
 def test_b1_pending_to_authorized_or_passed_requires_machine_checkable_evidence(
     repo_root: Path, tmp_path: Path
 ) -> None:
-    raw = load_status(repo_root).raw
+    raw = pending_raw()  # pre-B1 baseline
     with pytest.raises(ConfigError, match="illegal transition"):
         apply_transition(raw, "B1", "AUTHORIZED")  # B1's authorized state is PASSED, with evidence
     with pytest.raises(ConfigError, match="prerequisites"):
@@ -715,11 +720,16 @@ def test_adapters_cannot_be_executed_directly_without_authorization(
 
     delivered = tmp_path / "d.bin"
     delivered.write_bytes(b"x")
+    pending = make_verbatim_status_repo(tmp_path / "pending")
     for adapter in (
         HttpsFileAdapter(fake_source(), {"m.csv": "https://fake.invalid/m.csv"}, opener=opener),
         LocalImportAdapter(fake_source(), delivered),
     ):
+        # before B1 (pre-B1 baseline): locked
         with pytest.raises(ResearchGateError, match="Real-data acquisition is locked"):
+            adapter.execute(tmp_path / "store", repo_root=pending)
+        # real state (B1 owner-approved, B2 ready): only the approved route may execute
+        with pytest.raises(ResearchGateError, match="not the B1-approved route"):
             adapter.execute(tmp_path / "store", repo_root=repo_root)
     assert calls == []
     assert not (tmp_path / "store").exists()

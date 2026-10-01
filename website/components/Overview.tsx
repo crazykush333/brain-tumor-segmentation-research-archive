@@ -9,7 +9,8 @@ const ICON: Record<string, { icon: string; label: string; tone: string }> = {
   CLOSED: { icon: "✓", label: "Closed", tone: "text-emerald-700 dark:text-emerald-400" },
   AVAILABLE: { icon: "✓", label: "Available", tone: "text-emerald-700 dark:text-emerald-400" },
   PENDING: { icon: "⏳", label: "Pending", tone: "text-amber-700 dark:text-amber-400" },
-  AUTHORIZED: { icon: "▶", label: "Authorized", tone: "text-sky-700 dark:text-sky-400" },
+  ROUTE_AUTHORIZED: { icon: "✓", label: "Authorized", tone: "text-emerald-700 dark:text-emerald-400" },
+  AUTHORIZED: { icon: "🔓", label: "Ready", tone: "text-sky-700 dark:text-sky-400" },
   RUNNING: { icon: "⏳", label: "Running", tone: "text-sky-700 dark:text-sky-400" },
   IN_PROGRESS: { icon: "⏳", label: "In progress", tone: "text-sky-700 dark:text-sky-400" },
   NOT_STARTED: { icon: "○", label: "Not started", tone: "text-slate-500 dark:text-slate-400" },
@@ -36,7 +37,7 @@ export function StageOverview() {
                   <span aria-hidden="true" className="mr-2 inline-block w-5 text-center">
                     {s.icon}
                   </span>
-                  {s.label}
+                  {o.status_label ?? s.label}
                 </td>
                 <td className="hidden text-sm text-slate-500 sm:table-cell">{o.detail}</td>
               </tr>

@@ -1,4 +1,13 @@
 {
+  "amendments": [
+    {
+      "date": "2026-10-01",
+      "file": "docs/research/protocol-amendments/2026-10-01_B1_data-route.md",
+      "id": "v1.0-A1",
+      "title": "Protocol v1.0 amendment A1: B1 operational data route",
+      "type": "DATA-ROUTE / OPERATIONAL"
+    }
+  ],
   "frozen_on": "2026-09-28",
   "git_tag": "protocol-v1.0",
   "parameters": {

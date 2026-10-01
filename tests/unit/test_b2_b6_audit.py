@@ -65,7 +65,11 @@ from brats_uncertainty.repo_checks import check_paths, sniff_imaging
 from brats_uncertainty.results.site_export import build_count_block
 from brats_uncertainty.utils.hashing import sha256_bytes, sha256_file
 from brats_uncertainty.utils.io import write_json
-from tests.conftest import FAKE_ROUTE, make_status_repo, make_verbatim_status_repo
+from tests.conftest import (
+    FAKE_ROUTE,
+    make_status_repo,
+    make_verbatim_status_repo,
+)
 from tests.fixtures.fake_evidence import (
     FAKE_SCHEMA,
     build_fake_chain,
@@ -99,7 +103,8 @@ def _synthetic_config(tmp_path: Path, repo_root: Path) -> Path:
 def test_A_real_acquisition_requires_b1(repo_root: Path, tmp_path: Path) -> None:
     d = tmp_path / "d.bin"
     d.write_bytes(b"x")
-    for root in (repo_root, make_status_repo(tmp_path / "fake", closed=set())):
+    pending = make_verbatim_status_repo(tmp_path / "pending")  # pre-B1 baseline
+    for root in (pending, make_status_repo(tmp_path / "fake", closed=set())):
         with pytest.raises(ResearchGateError, match="Real-data acquisition is locked"):
             stage_acquire(
                 root,
@@ -111,6 +116,19 @@ def test_A_real_acquisition_requires_b1(repo_root: Path, tmp_path: Path) -> None
                 storage_label="x",
             )
     assert not (tmp_path / "s").exists()
+    # real state: B1 passed via the owner-approved alternative; a non-approved route is refused
+    with pytest.raises(ResearchGateError, match="not the B1-approved route"):
+        stage_acquire(
+            repo_root,
+            LocalImportAdapter(fake_source(), d),
+            storage_root=tmp_path / "s",
+            out_record=tmp_path / "r.json",
+            acquired_by="t",
+            execute=True,
+            storage_label="x",
+            require_clean_commit=False,
+        )
+    assert not (tmp_path / "s").exists() and not (tmp_path / "r.json").exists()
 
 
 # ----- B. calling acquisition != B2 passed
@@ -417,7 +435,7 @@ def test_N_synthetic_tree_tricks_cannot_unlock_real_mode(repo_root: Path, tmp_pa
         stage_hash_metadata(
             repo_root, "B3", ds.crosswalk, source_url=SYN_URL, doi="10.0/x", out=tmp_path / "o.json"
         )
-    assert check_action("acquire_data", repo_root)
+    assert check_action("record_crosswalk_hash", repo_root)  # B3 LOCKED in the real state
 
 
 # ---------------------------------------------------------------- transition writer
@@ -505,7 +523,10 @@ def test_malformed_status_fails_safely(repo_root: Path) -> None:
         (lambda r: r["gates"].append("B13"), "malformed gate entry"),
         (lambda r: r.update(data="pending"), "data must be a mapping"),
         (lambda r: r.pop("training"), "missing key"),
-        (lambda r: r["gates"][9].update(closed_on="2000-01-01"), "closed_on but is not closed"),
+        (
+            lambda r: next(g for g in r["gates"] if g["id"] == "B3").update(closed_on="2000-01-01"),
+            "closed_on but is not closed",
+        ),
     ]:
         raw = json.loads(json.dumps(base))
         mutate(raw)
@@ -882,18 +903,25 @@ def test_documentation_never_claims_b1_to_b6_complete(repo_root: Path) -> None:
         "README.md",
         "data/README.md",
     ]
+    # B1 is authorized (owner-approved alternative); B2-B6 must never be claimed complete
     claim = re.compile(
-        r"(?i)\bB[1-6]\b\s*(?:=|:|is|has)\s*(?:now\s+)?(?:passed|closed|complete|completed|approved|verified)\b"
+        r"(?i)\bB[2-6]\b\s*(?:=|:|is|has)\s*(?:now\s+)?(?:passed|closed|complete|completed|approved|verified)\b"
     )
     for rel in docs:
         text = (repo_root / rel).read_text(encoding="utf-8")
         assert not claim.search(text), (rel, claim.search(text))
+    tcia_claim = re.compile(r"(?i)\bTCIA\s+(?:has\s+)?(?:approved|authori[sz]ed)\b")
     for rel in (
         "docs/data/DATA_ACCESS.md",
         "docs/data/DATA_PROVENANCE.md",
         "docs/data/B1_DATA_ROUTE_AUTHORIZATION.md",
+        "docs/data/B1_EVIDENCE_2026-10-01.md",
+        "README.md",
     ):
-        assert "PENDING" in (repo_root / rel).read_text(encoding="utf-8"), rel
+        text = (repo_root / rel).read_text(encoding="utf-8")
+        assert "owner-approved alternative" in text.lower(), rel
+        assert not tcia_claim.search(text), rel
+        assert "no data" in text.lower() or "not executed" in text.lower(), rel
     assert (
         "not sent"
         in (repo_root / "docs/data/TCIA_DATA_ROUTE_INQUIRY.md").read_text(encoding="utf-8").lower()

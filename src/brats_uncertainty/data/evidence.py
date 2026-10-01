@@ -10,13 +10,22 @@ All evidence
 
 B1 PASSED
     ``docs/data/B1_EVIDENCE_<response date>.md`` recording *external written*
-    authorization (see B1_EVIDENCE_TEMPLATE.md): every field of the template
+    authorization (see B1_EVIDENCE_TEMPLATE.md): ``Source class:
+    EXTERNAL_PROVIDER_AUTHORIZATION`` and no synthetic marker (synthetic
+    authorization never authorizes real-data acquisition; see
+    ``data.synthetic_b1``), every field of the template
     exactly once and filled in, an external evidence type (TCIA Help Desk,
     official TCIA instruction, other authoritative written authorization), the
     protocol dataset and DOI, ``Approved route: <data.approved_route>``,
     ``Authorization status: AUTHORIZED``, ``Conclusion: APPROVED`` and the
-    provider's exact wording quoted. The B1 record, the inquiry and the
-    template are documentation, never authorization.
+    provider's exact wording quoted. Alternatively ``Source class:
+    OWNER_APPROVED_ALTERNATIVE`` (the owner-approved alternative of the frozen B1
+    wording, protocol §5.1/SR7): the project owner, a dated decision citing a
+    logged protocol amendment, an official source, ``NO`` for mirroring,
+    redistribution, repository storage and website exposure, ``External provider
+    authorization: NONE``, no claim of TCIA approval and no mirror/upload route.
+    The B1 record, the inquiry and the template are documentation, never
+    authorization.
 
 B2-B6 PASSED
     The gate's own execution record, fully re-validated (schema, fingerprint),
@@ -31,6 +40,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -57,7 +67,20 @@ _B1_TYPES = (
     "Other authoritative written authorization",
 )
 _B1_ROUTE_CATEGORIES = ("A", "B", "C")
+# Source classes of a B1 authorization record. EXTERNAL (written provider authorization) and
+# OWNER (the owner-approved alternative named in the frozen B1 wording, protocol §5.1/SR7;
+# approved by the owner 2026-10-01) can pass the real gate B1; SYNTHETIC never can.
+SOURCE_CLASS_EXTERNAL = "EXTERNAL_PROVIDER_AUTHORIZATION"
+SOURCE_CLASS_OWNER = "OWNER_APPROVED_ALTERNATIVE"
+SOURCE_CLASS_SYNTHETIC = "SYNTHETIC_TEST_AUTHORIZATION"
+SYNTHETIC_TEST_ONLY = "SYNTHETIC_TEST_ONLY"
+SYNTHETIC_AUTHORIZATION_REFUSED = (
+    "synthetic authorization cannot authorize real-data acquisition "
+    f"({SOURCE_CLASS_SYNTHETIC} / {SYNTHETIC_TEST_ONLY} evidence is for software tests only)"
+)
+_SYNTHETIC_FLAG = re.compile(r"(?mi)^Synthetic:[ \t]*true[ \t]*$")
 _B1_FIELDS = (
+    "Source class",
     "Protocol version",
     "Dataset",
     "DOI",
@@ -71,13 +94,53 @@ _B1_FIELDS = (
     "Response date",
     "Evidence reference",
     "Interpretation",
+    "Conditions",
     "Restrictions",
     "Attribution requirements",
     "Approved route",
     "Authorization status",
     "Conclusion",
 )
-_B1_PLACEHOLDER = re.compile(r"<[^>]*>|\b(?:TBD|TODO|PENDING|FILL)\b|^\?+$", re.IGNORECASE)
+_B1_OWNER_FIELDS = (
+    "Source class",
+    "Evidence basis",
+    "Protocol version",
+    "Dataset",
+    "DOI",
+    "Owner",
+    "Date",
+    "Approval basis",
+    "Approved route",
+    "Official source",
+    "Download mechanism",
+    "Third-party mirroring",
+    "Public redistribution",
+    "Repository data storage",
+    "Website data exposure",
+    "External provider authorization",
+    "Conditions",
+    "Restrictions",
+    "Attribution requirements",
+    "B1 status",
+    "Authorization status",
+    "Conclusion",
+)
+_B1_OWNER_NO = (
+    "Third-party mirroring",
+    "Public redistribution",
+    "Repository data storage",
+    "Website data exposure",
+)
+# an owner-approved record must never claim provider approval or name a mirror/upload route
+_TCIA_APPROVAL_CLAIM = re.compile(r"(?i)\bTCIA\s+(?:has\s+)?(?:approved|authori[sz]ed)\b")
+_AMENDMENT_REF = re.compile(
+    r"docs/research/protocol-amendments/\d{4}-\d{2}-\d{2}_[A-Za-z0-9_.-]+\.md"
+)
+_MIRROR_ROUTE = re.compile(
+    r"(?i)kaggle|mirror|re-?host|hugging\s*face|google\s*drive|\bs3\b|git\s*lfs|upload"
+)
+# <...> placeholders; an e-mail address in angle brackets (<x@y>) is a real value
+_B1_PLACEHOLDER = re.compile(r"<[^>@]*>|\b(?:TBD|TODO|PENDING|FILL)\b|^\?+$", re.IGNORECASE)
 _B1_TEMPLATE_MARKER = "TEMPLATE - NOT EVIDENCE"
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
@@ -113,10 +176,10 @@ def check_evidence_committed(evidence: Mapping[str, str], git: GitView) -> None:
             raise ConfigError(f"gate {gid}: evidence must be committed or staged in git: {rel}")
 
 
-def _b1_fields(text: str) -> dict[str, str]:
+def _b1_fields(text: str, names: tuple[str, ...] = _B1_FIELDS) -> dict[str, str]:
     """Each machine-checked B1 field exactly once at the start of a line, with a real value."""
     out: dict[str, str] = {}
-    for name in _B1_FIELDS:
+    for name in names:
         found = re.findall(rf"(?m)^{re.escape(name)}:[ \t]*(.*?)[ \t]*$", text)
         if len(found) != 1:
             raise ConfigError(f"gate B1: evidence must contain exactly one '{name}:' line")
@@ -134,25 +197,57 @@ def _b1_date(name: str, value: str) -> date:
         raise ConfigError(f"gate B1: evidence '{name}:' must be YYYY-MM-DD: {value!r}") from exc
 
 
-def check_b1_evidence(
-    rel: str,
-    path: Path,
-    approved_route: str | None,
+def is_synthetic_b1_text(text: str) -> bool:
+    """True if a B1 authorization text carries any synthetic marker (fail closed)."""
+    return (
+        SOURCE_CLASS_SYNTHETIC in text
+        or SYNTHETIC_TEST_ONLY in text
+        or bool(_SYNTHETIC_FLAG.search(text))
+    )
+
+
+@dataclass(frozen=True)
+class B1Evidence:
+    """Fields and quoted provider wording extracted from a B1 authorization record."""
+
+    fields: Mapping[str, str]
+    wording: tuple[str, ...]
+    synthetic: bool
+
+    @property
+    def source_class(self) -> str:
+        return self.fields["Source class"]
+
+
+def parse_b1_evidence(text: str) -> B1Evidence:
+    """Parse a B1 authorization record (template format). Validates form, not authority."""
+    if _B1_TEMPLATE_MARKER in text or "<FILL" in text:
+        raise ConfigError("gate B1: evidence is an unfilled copy of the template")
+    fields = _b1_fields(text)
+    block = re.search(r"(?ms)^## Exact provider wording[ \t]*$(.*?)(?=^#{1,2} |\Z)", text)
+    quoted = [ln for ln in (block.group(1) if block else "").splitlines() if ln.startswith(">")]
+    if not any(ln.lstrip("> ").strip() for ln in quoted):
+        raise ConfigError(
+            "gate B1: evidence must quote the provider's exact wording ('> ' lines) under "
+            "'## Exact provider wording'"
+        )
+    wording = tuple(ln[1:].removeprefix(" ") for ln in quoted)
+    return B1Evidence(fields, wording, is_synthetic_b1_text(text))
+
+
+def validate_b1_content(
+    ev: B1Evidence,
     *,
     identity: Mapping[str, Any],
     protocol_version: str,
+    approved_route: str | None,
+    outcome: tuple[str, str],
 ) -> None:
-    """B1 may pass only on recorded external written authorization (never inferred)."""
-    if not _B1_EVIDENCE.match(rel):
-        raise ConfigError(
-            "gate B1: evidence must be docs/data/B1_EVIDENCE_<YYYY-MM-DD>.md "
-            "(documentation such as the B1 record, the inquiry or the template is not "
-            "authorization)"
-        )
-    text = path.read_text(encoding="utf-8")
-    if _B1_TEMPLATE_MARKER in text or "<FILL" in text:
-        raise ConfigError("gate B1: evidence is an unfilled copy of the template")
-    f = _b1_fields(text)
+    """Checks shared by the real gate and the synthetic test mode.
+
+    ``outcome`` is the required (Authorization status, Conclusion) pair.
+    """
+    f = ev.fields
     if f["Evidence type"] not in _B1_TYPES:
         raise ConfigError(
             f"gate B1: 'Evidence type:' must be one of {_B1_TYPES} (external written "
@@ -174,20 +269,138 @@ def check_b1_evidence(
     response = _b1_date("Response date", f["Response date"])
     if response < inquiry:
         raise ConfigError("gate B1: 'Response date:' precedes 'Inquiry date:'")
-    if not rel.endswith(f"B1_EVIDENCE_{response.isoformat()}.md"):
+    status, conclusion = outcome
+    if f["Authorization status"] != status or f["Conclusion"] != conclusion:
+        raise ConfigError(
+            f"gate B1: evidence must record 'Authorization status: {status}' and "
+            f"'Conclusion: {conclusion}' (anything else keeps B1 PENDING, FAILED or BLOCKED)"
+        )
+
+
+def b1_source_class(text: str) -> str:
+    """The single 'Source class:' of a B1 record (synthetic markers win; fail closed)."""
+    if is_synthetic_b1_text(text):
+        return SOURCE_CLASS_SYNTHETIC
+    return _b1_fields(text, ("Source class",))["Source class"]
+
+
+def check_owner_alternative(
+    rel: str,
+    text: str,
+    approved_route: str | None,
+    *,
+    identity: Mapping[str, Any],
+    protocol_version: str,
+    owner: str | None,
+    repo_root: Path,
+) -> None:
+    """The owner-approved alternative of the frozen B1 wording: explicit, restricted and
+    never presented as provider (TCIA) authorization."""
+    f = _b1_fields(text, _B1_OWNER_FIELDS)
+    if f["Protocol version"] != protocol_version:
+        raise ConfigError(f"gate B1: evidence 'Protocol version:' must be {protocol_version}")
+    if f["Dataset"] != identity["dataset"] or f["DOI"] != identity["doi"]:
+        raise ConfigError(
+            f"gate B1: evidence must name dataset {identity['dataset']!r} "
+            f"and DOI {identity['doi']!r}"
+        )
+    if not owner or f["Owner"] != owner:
+        raise ConfigError("gate B1: owner-approved alternative must name the project owner")
+    when = _b1_date("Date", f["Date"])
+    if not rel.endswith(f"B1_EVIDENCE_{when.isoformat()}.md"):
+        raise ConfigError("gate B1: evidence file name must carry the owner decision 'Date:'")
+    if "owner-approved alternative" not in f["Approval basis"].lower():
+        raise ConfigError(
+            "gate B1: 'Approval basis:' must cite the owner-approved alternative of the frozen "
+            "B1 wording"
+        )
+    if not f["Official source"].startswith(tuple(identity["prefixes"])):
+        raise ConfigError("gate B1: 'Official source:' must be an official dataset source URL")
+    for name in _B1_OWNER_NO:
+        if f[name] != "NO":
+            raise ConfigError(f"gate B1: owner-approved alternative requires '{name}: NO'")
+    if f["External provider authorization"] != "NONE":
+        raise ConfigError(
+            "gate B1: owner-approved alternative must record "
+            "'External provider authorization: NONE'"
+        )
+    ref = _AMENDMENT_REF.search(f["Evidence basis"])
+    if not ref or not (repo_root / ref.group(0)).is_file():
+        raise ConfigError(
+            "gate B1: 'Evidence basis:' must cite the logged protocol amendment "
+            "(docs/research/protocol-amendments/<date>_<topic>.md) recording the owner decision"
+        )
+    if _TCIA_APPROVAL_CLAIM.search(text):
+        raise ConfigError(
+            "gate B1: an owner-approved alternative must not claim TCIA approval "
+            f"(a provider authorization is recorded as {SOURCE_CLASS_EXTERNAL})"
+        )
+    if _MIRROR_ROUTE.search(f["Approved route"]):
+        raise ConfigError(
+            "gate B1: the owner-approved alternative cannot approve mirroring, re-hosting or "
+            "uploads (private third-party re-hosting needs TCIA confirmation, protocol §5.1)"
+        )
+    if not approved_route or f["Approved route"] != approved_route:
+        raise ConfigError("gate B1: evidence 'Approved route:' must equal data.approved_route")
+    if (f["B1 status"], f["Authorization status"], f["Conclusion"]) != (
+        "AUTHORIZED",
+        "AUTHORIZED",
+        "APPROVED",
+    ):
+        raise ConfigError(
+            "gate B1: evidence must record 'B1 status: AUTHORIZED', "
+            "'Authorization status: AUTHORIZED' and 'Conclusion: APPROVED'"
+        )
+
+
+def check_b1_evidence(
+    rel: str,
+    path: Path,
+    approved_route: str | None,
+    *,
+    identity: Mapping[str, Any],
+    protocol_version: str,
+    owner: str | None = None,
+) -> None:
+    """B1 passes only on a recorded external written authorization or on the owner-approved
+    alternative of the frozen B1 wording; never inferred, never synthetic."""
+    if not _B1_EVIDENCE.match(rel):
+        raise ConfigError(
+            "gate B1: evidence must be docs/data/B1_EVIDENCE_<YYYY-MM-DD>.md "
+            "(documentation such as the B1 record, the inquiry or the template is not "
+            "authorization)"
+        )
+    text = path.read_text(encoding="utf-8")
+    if _B1_TEMPLATE_MARKER in text or "<FILL" in text:
+        raise ConfigError("gate B1: evidence is an unfilled copy of the template")
+    if is_synthetic_b1_text(text):  # checked before parsing: any synthetic marker refuses
+        raise ConfigError(f"gate B1: {SYNTHETIC_AUTHORIZATION_REFUSED}")
+    source_class = b1_source_class(text)
+    if source_class == SOURCE_CLASS_OWNER:
+        check_owner_alternative(
+            rel,
+            text,
+            approved_route,
+            identity=identity,
+            protocol_version=protocol_version,
+            owner=owner,
+            repo_root=path.parents[len(Path(rel).parts) - 1],  # rel is docs/data/<file>
+        )
+        return
+    if source_class != SOURCE_CLASS_EXTERNAL:
+        raise ConfigError(
+            f"gate B1: 'Source class:' must be {SOURCE_CLASS_EXTERNAL} or {SOURCE_CLASS_OWNER}"
+        )
+    ev = parse_b1_evidence(text)
+    validate_b1_content(
+        ev,
+        identity=identity,
+        protocol_version=protocol_version,
+        approved_route=approved_route,
+        outcome=("AUTHORIZED", "APPROVED"),
+    )
+    if not rel.endswith(f"B1_EVIDENCE_{ev.fields['Response date']}.md"):
         raise ConfigError("gate B1: evidence file name must carry the 'Response date:'")
-    if f["Authorization status"] != "AUTHORIZED" or f["Conclusion"] != "APPROVED":
-        raise ConfigError(
-            "gate B1: evidence must record 'Authorization status: AUTHORIZED' and "
-            "'Conclusion: APPROVED' (anything else keeps B1 PENDING, FAILED or BLOCKED)"
-        )
-    wording = re.search(r"(?ms)^## Exact provider wording[ \t]*$(.*?)(?=^#{1,2} |\Z)", text)
-    quoted = [ln for ln in (wording.group(1) if wording else "").splitlines() if ln.startswith(">")]
-    if not any(ln.lstrip("> ").strip() for ln in quoted):
-        raise ConfigError(
-            "gate B1: evidence must quote the provider's exact wording ('> ' lines) under "
-            "'## Exact provider wording'"
-        )
 
 
 IDENTITY_CONFIG = Path("configs/dataset/brats2021.yaml")

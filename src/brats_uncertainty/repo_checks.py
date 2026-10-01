@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from brats_uncertainty.data.evidence import is_synthetic_b1_text
 from brats_uncertainty.protocol import load_protocol
 from brats_uncertainty.utils.git import git_tracked_files
 
@@ -54,6 +55,8 @@ PROHIBITED_NAME_PATTERNS = (
     re.compile(r"^\.env\..+$"),
 )
 ALLOWED_NAMES = (".env.example",)
+# real B1 evidence location: must never hold SYNTHETIC_TEST_ONLY content
+_B1_EVIDENCE_NAME = re.compile(r"^docs/data/B1_EVIDENCE_[^/]*\.md$")
 SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("private key block", re.compile("-----BEGIN [A-Z ]*" + "PRIVATE KEY-----")),
     ("GitHub token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b")),
@@ -170,6 +173,10 @@ def check_paths(files: list[str], root: Path) -> list[Finding]:
                 for label, pat in SECRET_PATTERNS:
                     if pat.search(text):
                         findings.append(Finding(rel, f"possible secret: {label}"))
+                if _B1_EVIDENCE_NAME.match(rel) and is_synthetic_b1_text(text):
+                    findings.append(
+                        Finding(rel, "synthetic authorization in a real B1 evidence location")
+                    )
     return findings
 
 

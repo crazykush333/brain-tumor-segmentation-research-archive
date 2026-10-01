@@ -1,7 +1,9 @@
-"""Gate B1: PENDING -> AUTHORIZED (lifecycle PASSED) only on recorded external written evidence.
+"""Gate B1: PENDING -> AUTHORIZED (lifecycle PASSED) only on a recorded, accepted basis.
 
-Positive paths use FAKE evidence in temporary repositories only; the real
-repository status is read-only here and must stay B1 PENDING.
+The external-evidence rules are exercised with FAKE evidence in temporary
+repositories that start from the pre-B1 baseline. The real repository is
+read-only here; its genuine state is B1 PASSED via the owner-approved
+alternative (amendment v1.0-A1), with no external provider authorization.
 """
 
 from __future__ import annotations
@@ -11,13 +13,19 @@ from pathlib import Path
 
 import pytest
 
+from brats_uncertainty.data.evidence import (
+    SOURCE_CLASS_EXTERNAL,
+    SOURCE_CLASS_OWNER,
+    b1_source_class,
+)
 from brats_uncertainty.errors import ConfigError
 from brats_uncertainty.evaluation.status import load_status
 from brats_uncertainty.evaluation.transitions import write_transition
 from brats_uncertainty.results.site_export import build_overview
-from tests.conftest import FAKE_ROUTE, make_status_repo, make_verbatim_status_repo
+from tests.conftest import FAKE_ROUTE, OWNER_ROUTE, make_status_repo, make_verbatim_status_repo
 from tests.fixtures.fake_evidence import B1_FAKE_FIELDS, b1_evidence_text, write_b1_evidence
 
+AMENDMENT = "docs/research/protocol-amendments/2026-10-01_B1_data-route.md"
 TEMPLATE = "docs/data/B1_EVIDENCE_TEMPLATE.md"
 INQUIRY = "docs/data/TCIA_DATA_ROUTE_INQUIRY.md"
 RECORD = "docs/data/B1_DATA_ROUTE_AUTHORIZATION.md"
@@ -48,24 +56,64 @@ def _without_line(text: str, field: str) -> str:
 
 
 # ---------------------------------------------------------------- real repository state
-def test_real_repository_b1_is_pending_without_evidence(repo_root: Path) -> None:
+# REAL OWNER-APPROVED PRODUCTION STATE (2026-10-01): B1 PASSED via the owner-approved
+# alternative (amendment v1.0-A1); no external provider evidence exists.
+def test_real_b1_is_owner_approved_with_no_external_authorization(repo_root: Path) -> None:
     st = load_status(repo_root)
-    assert st.gate("B1").status == "PENDING"
-    assert st.gate("B1").evidence in (None, "")
-    assert st.raw["data"]["authorization"] == "PENDING"
-    assert st.raw["data"]["approved_route"] is None
+    assert st.gate("B1").status == "PASSED"
+    assert st.gate("B1").evidence == "docs/data/B1_EVIDENCE_2026-10-01.md"
+    assert st.gate("B2").status == "AUTHORIZED"  # ready, not executed
+    assert all(st.gate(f"B{i}").status == "LOCKED" for i in range(3, 13))
+    assert st.raw["data"]["authorization"] == "APPROVED"
+    assert st.raw["data"]["approved_route"] == OWNER_ROUTE
     assert st.raw["data"]["inquiry_sent"] is False
     assert st.raw["data"]["acquired"] is False
-    assert all(st.gate(f"B{i}").status == "LOCKED" for i in range(2, 13))
-    assert not list((repo_root / "docs/data").glob("B1_EVIDENCE_2*.md"))
     assert st.raw["data"]["b1_evidence_template"] == TEMPLATE
+    evidence = list((repo_root / "docs/data").glob("B1_EVIDENCE_2*.md"))
+    assert [p.name for p in evidence] == ["B1_EVIDENCE_2026-10-01.md"]
+    text = evidence[0].read_text(encoding="utf-8")
+    assert b1_source_class(text) == SOURCE_CLASS_OWNER
+    assert re.search(r"(?m)^External provider authorization: NONE$", text)
+    assert SOURCE_CLASS_EXTERNAL not in text.split("## 1.")[0]  # header fields: owner class only
+    assert "docs/research/protocol-amendments/2026-10-01_B1_data-route.md" in text
 
 
-def test_real_overview_shows_b1_data_route_authorization_pending(repo_root: Path) -> None:
+def test_real_overview_shows_owner_approved_b1_and_ready_b2(repo_root: Path) -> None:
     st = load_status(repo_root)
     rows = build_overview(st.raw, {g.id: g.status for g in st.gates.values()}, repo_root)
     b1 = next(r for r in rows if r["key"] == "b1")
-    assert (b1["label"], b1["status"]) == ("B1 Data-route authorization", "PENDING")
+    assert (b1["label"], b1["status"]) == ("B1 Data route", "ROUTE_AUTHORIZED")
+    assert b1["status_label"] == "Authorized — Owner-approved alternative"
+    assert next(r for r in rows if r["key"] == "b2")["status"] == "AUTHORIZED"
+    site = (repo_root / "website/data/status.json").read_text(encoding="utf-8")
+    assert "TCIA approved" not in site
+    assert "Owner-approved alternative" in site
+
+
+def test_amendment_records_the_owner_decision(repo_root: Path) -> None:
+    text = (repo_root / AMENDMENT).read_text(encoding="utf-8")
+    for needle in (
+        "Amendment ID: v1.0-A1",
+        "Amendment type: DATA-ROUTE / OPERATIONAL",
+        "Date: 2026-10-01",
+        "Owner: Ayush Kushwaha",
+        "Test-set data seen before amendment: No",
+        "## Previous state",
+        "pending an external TCIA response",
+        "**New state:** owner-approved direct official TCIA access into a private, "
+        "access-restricted computational environment",
+        "**Scientific impact:** none.",
+        "**Methodological impact:** none.",
+        "| External provider authorization | NONE.",
+        "| TCIA response | NONE |",
+        "| Third-party re-hosting | Not authorized |",
+        "| Kaggle mirroring | Not authorized |",
+        "| Public redistribution | Not authorized |",
+    ):
+        assert needle in text, needle
+    index = (repo_root / "docs/research/protocol-amendments/README.md").read_text(encoding="utf-8")
+    assert "v1.0-A1 — 2026-10-01 — DATA-ROUTE / OPERATIONAL" in index
+    assert "[2026-10-01_B1_data-route.md](2026-10-01_B1_data-route.md)" in index
 
 
 # ---------------------------------------------------------------- documents
@@ -98,10 +146,12 @@ def test_inquiry_is_ready_to_send_manually(repo_root: Path) -> None:
     assert "CLOSED" not in text  # B1's authorized state is PASSED, not the gate-A CLOSED
 
 
-def test_b1_record_states_the_external_evidence_rule(repo_root: Path) -> None:
+def test_b1_record_states_the_owner_approved_basis_and_the_rules(repo_root: Path) -> None:
     text = (repo_root / RECORD).read_text(encoding="utf-8")
-    assert "| **Status** | **PENDING** |" in text
-    assert "does not complete B1" in text
+    assert "| **Status** | **AUTHORIZED: owner-approved alternative**" in text
+    assert "| Source class | `OWNER_APPROVED_ALTERNATIVE` |" in text
+    assert "| External provider authorization | **NONE." in text
+    assert "no TCIA authorization is claimed" in text
     for url in (
         "https://www.cancerimagingarchive.net/data-usage-policies-and-restrictions/",
         "https://www.cancerimagingarchive.net/tcia-data-analysis-center/",
@@ -109,7 +159,7 @@ def test_b1_record_states_the_external_evidence_rule(repo_root: Path) -> None:
         "https://www.cancerimagingarchive.net/analysis-result/rsna-asnr-miccai-brats-2021/",
     ):
         assert url in text
-    assert "verified 2026-09-29; re-verified 2026-09-30" in text
+    assert "verified 2026-09-29; re-verified 2026-09-30 and 2026-10-01" in text
     for item in ("publicly downloadable", "CC BY 4.0 licence alone", "Kaggle availability"):
         assert item in text
 
@@ -203,4 +253,5 @@ def test_recorded_external_evidence_passes_b1_and_shows_authorized(tmp_path: Pat
     st = load_status(passed)
     rows = build_overview(st.raw, {g.id: g.status for g in st.gates.values()}, passed)
     b1 = next(r for r in rows if r["key"] == "b1")
-    assert (b1["label"], b1["status"]) == ("B1 Data-route authorization", "AUTHORIZED")
+    assert (b1["label"], b1["status"]) == ("B1 Data route", "ROUTE_AUTHORIZED")
+    assert b1["status_label"] == "Authorized — external provider authorization"

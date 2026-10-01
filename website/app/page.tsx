@@ -31,7 +31,11 @@ export default function HomePage() {
         <h2 className="mb-3 font-serif text-2xl font-semibold text-slate-900 dark:text-slate-50">Current status</h2>
         <StageOverview />
         <p className="mt-3 text-sm text-slate-500">
-          Data authorization: {status.data.authorization.toLowerCase()}. Data acquired:{" "}
+          Data authorization: {status.data.authorization.toLowerCase()}
+          {status.data.authorization_basis === "OWNER_APPROVED_ALTERNATIVE"
+            ? " (owner-approved alternative; no external TCIA authorization is claimed)"
+            : ""}
+          . Data acquired:{" "}
           {status.data.acquired ? "yes" : "no"}. {status.data.statement}
         </p>
       </section>

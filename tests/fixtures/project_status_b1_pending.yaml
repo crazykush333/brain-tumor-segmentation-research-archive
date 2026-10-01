@@ -47,8 +47,8 @@ protocol:
   sha256: "704c0b495917344f44b93e7548ade0e32a71220265419516a2c83d626fcd9811"
 
 data:
-  authorization: APPROVED         # gate B1; PENDING | APPROVED | REFUSED
-  approved_route: "Direct official TCIA access into a private, access-restricted computational environment"  # set by gate-transition when B1 passes
+  authorization: PENDING          # gate B1; PENDING | APPROVED | REFUSED
+  approved_route: null            # set only when B1 closes with written evidence
   proposed_routes:
     A: "Private, access-restricted computational storage (e.g. private Kaggle dataset) - requires TCIA confirmation"
     B: "Runtime-only acquisition into an approved compute environment, no persistent third-party copy"
@@ -91,8 +91,8 @@ gates:
   - {id: A8, title: "PNDC full-text check (re-check mandatory if access becomes available)", status: OWNER_WAIVED, evidence: docs/research/19_GATE_A_CLOSURE_AUDIT.md, closed_on: "2026-09-28"}
   - {id: A9, title: "Owner approval; protocol frozen as v1.0 and tagged protocol-v1.0", status: CLOSED, evidence: docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md, closed_on: "2026-09-28"}
   # --- B: data gates (in order) -------------------------------------------------
-  - {id: B1, title: "Approved data route (TCIA written authorization or owner-approved alternative; §5.1, SR7, amendment v1.0-A1)", status: PASSED, evidence: "docs/data/B1_EVIDENCE_2026-10-01.md", closed_on: "2026-10-01"}
-  - {id: B2, title: "Official data acquired via the approved route", status: AUTHORIZED, evidence: null, closed_on: null}
+  - {id: B1, title: "Approved data route (recorded external written authorization from TCIA)", status: PENDING, evidence: null, closed_on: null}
+  - {id: B2, title: "Official data acquired via the approved route", status: LOCKED, evidence: null, closed_on: null}
   - {id: B3, title: "SHA-256 recorded for BraTS2021_MappingToTCIA.xlsx as used", status: LOCKED, evidence: null, closed_on: null}
   - {id: B4, title: "SHA-256 recorded for UCSF-PDGM-metadata_v5.csv as used", status: LOCKED, evidence: null, closed_on: null}
   - {id: B5, title: "Data manifest and hashes recorded", status: LOCKED, evidence: null, closed_on: null}
@@ -122,12 +122,12 @@ experiments:
   EXP-001: {status: PLANNED, metadata: experiments/EXP-001/metadata.yaml}
 
 next_step:
-  gate: B2
+  gate: B1
   description: >-
-    Controlled B2 real-data acquisition through the owner-approved route (direct official
-    TCIA access into a private, access-restricted computational environment; amendment
-    v1.0-A1). B2 is authorized but has not been executed; no data have been acquired.
-    B3-B12 remain locked until their prerequisites pass in order.
+    Send the prepared TCIA inquiry (docs/data/TCIA_DATA_ROUTE_INQUIRY.md) manually and
+    record the written reply with docs/data/B1_EVIDENCE_TEMPLATE.md. B1 passes only on
+    recorded external written authorization (protocol §5.1, SR7). No data acquisition or
+    compute may begin before B1 has passed.
 
 timeline:
   - {date: "2026-09-27", title: "Research-design phase documents (landscape, gaps, options, design)", status: DONE}
@@ -138,12 +138,10 @@ timeline:
   - {date: "2026-09-28", title: "Protocol v1.0 frozen and tagged protocol-v1.0", status: DONE}
   - {date: "2026-09-29", title: "Research software and reproducibility infrastructure (no data, no experiments)", status: DONE}
   - {date: "2026-09-29", title: "B1 authorization workflow documented; TCIA inquiry prepared (not yet sent); B2-B6 tooling prepared", status: DONE}
+  - {date: null, title: "Gate B1: approved data route", status: PENDING}
   - {date: "2026-09-30", title: "B2-B6 software (acquisition adapters, hashing, manifests, count verification, gate state machine) implemented; tested on SYNTHETIC_TEST_DATA only", status: DONE}
   - {date: "2026-09-30", title: "B1 authorization workflow finalized: TCIA inquiry final (not yet sent), evidence template, external-written-evidence-only rule", status: DONE}
-  - {date: "2026-10-01", title: "Protocol amendment v1.0-A1 (DATA-ROUTE / OPERATIONAL): owner-approved B1 data route; scientific impact none", status: DONE}
-  - {date: "2026-10-01", title: "Gate B1 authorized: owner-approved alternative (external provider authorization: none)", status: DONE}
-  - {date: null, title: "Gate B2: data acquisition via the owner-approved route (authorized, not executed)", status: PENDING}
-  - {date: null, title: "Gates B3-B6: metadata hashes, manifest, counts", status: LOCKED}
+  - {date: null, title: "Gates B2-B6: data acquisition, hashes, manifest, counts", status: LOCKED}
   - {date: null, title: "Gates B7-B9: same-patient screen, review, patient groups", status: LOCKED}
   - {date: null, title: "Gates B10-B12: final split, assertions, hashes", status: LOCKED}
   - {date: null, title: "Gates D1-D6: EXP-001 compute pilot", status: NOT_STARTED}

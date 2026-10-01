@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| Status | **Final draft, not sent.** The project owner sends it manually from their own email account. Claude Code does not send it. |
+| Status | **Final draft, not sent.** It is **not required** for the approved B1 route. On 2026-10-01, B1 was authorized through the owner-approved alternative (amendment v1.0-A1; source class `OWNER_APPROVED_ALTERNATIVE`; external provider authorization NONE). The inquiry stays available if the owner later wants TCIA's position on private third-party storage (route A), which remains **not authorized**. If sent, the owner sends it manually from their own email account. |
 | To | help@cancerimagingarchive.net, the TCIA Helpdesk address on the official Support page (verified 2026-09-29 and 2026-09-30) |
 | Purpose | Gate B1 of protocol v1.0: written guidance on the permitted data route |
-| Effect of sending | None on the gates. B1 stays **PENDING** until a written reply is recorded as evidence (see below). |
+| Effect of sending | None on the gates. A reply would be recorded as separate `EXTERNAL_PROVIDER_AUTHORIZATION` evidence and would not alter the owner-approved route already in force. |
 | After sending | Record the send date in [B1_DATA_ROUTE_AUTHORIZATION.md](B1_DATA_ROUTE_AUTHORIZATION.md) §7. Set `data.inquiry_sent: true` in `docs/project_status.yaml`. |
 
 Before sending, replace the four bracketed fields: `[Date]`, `[Full name]`, `[Affiliation / institution]` and `[Contact email]`. Add no personal data beyond what you want TCIA to have. Send the text between the two horizontal rules as a plain-text email.

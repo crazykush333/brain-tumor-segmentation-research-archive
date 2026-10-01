@@ -1,6 +1,6 @@
 # Data access
 
-**Status (2026-09-30): gate B1 is PENDING. B2–B6 are LOCKED. No study data have been acquired.** The B2–B6 software is implemented and tested on SYNTHETIC_TEST_DATA only. Real-data acquisition fails closed until B1 is legitimately passed ([B1_DATA_ROUTE_AUTHORIZATION.md](B1_DATA_ROUTE_AUTHORIZATION.md)).
+**Status (2026-10-01): gate B1 is AUTHORIZED through the owner-approved alternative (lifecycle `PASSED`; amendment v1.0-A1; external provider authorization NONE). B2 is AUTHORIZED (ready, not executed). B3–B12 are LOCKED. No study data have been acquired.** The B2–B6 software is implemented and tested on SYNTHETIC_TEST_DATA only ([B1_DATA_ROUTE_AUTHORIZATION.md](B1_DATA_ROUTE_AUTHORIZATION.md)).
 
 Labels used below:
 
@@ -31,26 +31,44 @@ Dataset roles (protocol §5):
 
 ## 2. Approved acquisition route
 
-**None.** `data.approved_route` in `docs/project_status.yaml` is `null`. The two candidate routes are described in the B1 record:
+**Direct official TCIA access into a private, access-restricted computational environment.** This is the exact value of `data.approved_route` in `docs/project_status.yaml`.
 
-- **Route A:** private, access-restricted Kaggle storage.
-- **Route B:** runtime-only acquisition into an approved compute environment.
+| Item | Value |
+|---|---|
+| Source class | `OWNER_APPROVED_ALTERNATIVE`: the alternative permitted by the frozen B1 wording (§5.1, SR7) |
+| Basis | Owner decision of 2026-10-01, logged as protocol amendment [v1.0-A1](../research/protocol-amendments/2026-10-01_B1_data-route.md) (DATA-ROUTE / OPERATIONAL; scientific and methodological impact: none) |
+| Evidence | [B1_EVIDENCE_2026-10-01.md](B1_EVIDENCE_2026-10-01.md) |
+| External provider authorization | **NONE.** No TCIA response exists, and no TCIA authorization is claimed. |
+| Source of record | the official TCIA BraTS 2021 page and its download links: the public TCIA Aspera Faspex package for the challenge data, and HTTPS from www.cancerimagingarchive.net for the crosswalk |
+| Where the data live | only the private, access-restricted computational environment used for the study |
 
-A public mirror is never used.
+Restrictions:
 
-## 3. Pending authorization (PENDING PROVIDER CONFIRMATION)
+- no public mirror;
+- no private Kaggle mirror;
+- no third-party re-hosting;
+- no redistribution;
+- no raw data in GitHub;
+- no raw data exposed through the website (Vercel/Netlify);
+- TCIA citation and attribution retained.
+
+## 3. Routes that remain unauthorized (PENDING PROVIDER CONFIRMATION)
 
 | Question | Status |
 |---|---|
-| Is a private, single-user copy on Kaggle permitted, or does it count as "mirroring"? | Pending: ask TCIA ([TCIA_DATA_ROUTE_INQUIRY.md](TCIA_DATA_ROUTE_INQUIRY.md), six questions; final, not yet sent) |
-| Is runtime-only download into Kaggle/Colab permitted and technically supported? | Pending |
-| Additional attribution, retention or deletion conditions | Pending |
+| Is a private, single-user copy on Kaggle or another third-party store permitted, or does it count as "mirroring"? | **Not authorized.** It would need TCIA confirmation under §5.1. The inquiry ([TCIA_DATA_ROUTE_INQUIRY.md](TCIA_DATA_ROUTE_INQUIRY.md)) has not been sent. |
+| Is runtime-only download into Kaggle/Colab permitted? | Not separately authorized; outside the approved route |
 
 **Nothing in this repository states or implies that Kaggle storage is permitted.** Documentation, URLs, public downloadability or platform access are never treated as authorization.
 
-B1 changes from PENDING to AUTHORIZED (gate status `PASSED`) only after actual external written evidence has been recorded: a TCIA Help Desk written response, an explicit official TCIA written instruction, or another clearly authoritative written authorization. It is never inferred from public downloadability, a TCIA web page, the CC licence alone, Kaggle availability, a successful test download or API availability. B1 closes only through `brats-uncertainty gate-transition B1 PASSED --evidence docs/data/B1_EVIDENCE_<response date>.md --on <date> --approved-route "<route>" --apply`. The evidence must follow [B1_EVIDENCE_TEMPLATE.md](B1_EVIDENCE_TEMPLATE.md) with every field filled in from the reply, including `Authorization status: AUTHORIZED`, `Conclusion: APPROVED` and the provider's exact wording. It must be staged or committed in git and name the same route. The B1 record, the inquiry and the template are documentation and are rejected as evidence. That command sets `data.authorization: APPROVED` and unlocks B2 (AUTHORIZED); every other gate stays LOCKED.
+B1 changes from PENDING to AUTHORIZED (gate status `PASSED`) only on a recorded basis the validator accepts. There are two source classes:
 
-## 4. Runtime acquisition procedure (PLANNED WORKFLOW; locked)
+- `EXTERNAL_PROVIDER_AUTHORIZATION`: a TCIA Help Desk written response, an explicit official TCIA written instruction, or another clearly authoritative written authorization. None exists for this project.
+- `OWNER_APPROVED_ALTERNATIVE`: an owner decision under the frozen B1 wording, backed by a logged protocol amendment. This is the basis in use.
+
+The external class follows the rules below. It is never inferred from public downloadability, a TCIA web page, the CC licence alone, Kaggle availability, a successful test download or API availability. B1 closes only through `brats-uncertainty gate-transition B1 PASSED --evidence docs/data/B1_EVIDENCE_<response date>.md --on <date> --approved-route "<route>" --apply`. The evidence must follow [B1_EVIDENCE_TEMPLATE.md](B1_EVIDENCE_TEMPLATE.md) with every field filled in from the reply, including `Authorization status: AUTHORIZED`, `Conclusion: APPROVED` and the provider's exact wording. It must be staged or committed in git and name the same route. The B1 record, the inquiry and the template are documentation and are rejected as evidence. That command sets `data.authorization: APPROVED` and unlocks B2 (AUTHORIZED); every other gate stays LOCKED.
+
+## 4. Runtime acquisition procedure (PLANNED WORKFLOW; B2 ready, not executed)
 
 ```
 approved source -> acquisition (B2) -> integrity verification -> manifest (B5) -> count verification (B6)
@@ -58,8 +76,8 @@ approved source -> acquisition (B2) -> integrity verification -> manifest (B5) -
 
 `brats-uncertainty acquire` is a **dry run by default**. It only prints the plan and never touches the network or the disk. With `--execute`, a real adapter runs only if all of the following hold, and otherwise fails closed with *"Real-data acquisition is locked because B1 data-route authorization has not been recorded."*:
 
-- gate B1 must have status PASSED (today it is PENDING);
-- gate B2 must have status AUTHORIZED or RUNNING (today it is LOCKED);
+- gate B1 must have status PASSED (today: PASSED, owner-approved alternative);
+- gate B2 must have status AUTHORIZED or RUNNING (today: AUTHORIZED, not executed);
 - `data.authorization` is `APPROVED`;
 - the adapter's `--route` equals `data.approved_route`.
 

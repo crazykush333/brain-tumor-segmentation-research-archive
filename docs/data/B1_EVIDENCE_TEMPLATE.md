@@ -2,7 +2,7 @@
 
 **TEMPLATE - NOT EVIDENCE.** This file records no authorization and cannot close gate B1. **STATUS = PENDING.**
 
-B1 moves from PENDING to AUTHORIZED only after actual external written evidence has been supplied and recorded. The status validator (`src/brats_uncertainty/data/evidence.py`) rejects this template, any copy that still contains the line above, and any copy with a `<FILL …>` placeholder. It also rejects any value that is empty, `PENDING`, `TBD` or `TODO`.
+This template is for `EXTERNAL_PROVIDER_AUTHORIZATION` evidence. The owner-approved alternative (`OWNER_APPROVED_ALTERNATIVE`), which is the basis of the current B1 authorization, uses its own format; see [B1_DATA_ROUTE_AUTHORIZATION.md](B1_DATA_ROUTE_AUTHORIZATION.md) §4 and [B1_EVIDENCE_2026-10-01.md](B1_EVIDENCE_2026-10-01.md). External evidence is recorded only after actual external written evidence has been supplied. The status validator (`src/brats_uncertainty/data/evidence.py`) rejects this template, any copy that still contains the line above, and any copy with a `<FILL …>` placeholder. It also rejects any value that is empty, `PENDING`, `TBD` or `TODO`.
 
 ## What counts as evidence
 
@@ -46,6 +46,7 @@ Each field below must appear exactly once, at the start of a line, in the form `
 
 | Field | Rule |
 |---|---|
+| Source class | exactly `EXTERNAL_PROVIDER_AUTHORIZATION`. A record carrying the synthetic test source class, the synthetic test-only label or a synthetic flag anywhere (see `src/brats_uncertainty/data/evidence.py`) is refused: synthetic authorization cannot authorize real-data acquisition. |
 | Protocol version | must equal `protocol.version` in `docs/project_status.yaml` (`v1.0`) |
 | Dataset | must equal `evidence_identity.dataset` in `configs/dataset/brats2021.yaml` |
 | DOI | must equal `evidence_identity.doi` in the same file |
@@ -56,7 +57,7 @@ Each field below must appear exactly once, at the start of a line, in the form `
 | Approved route | identical to the `--approved-route` value, which becomes `data.approved_route` |
 | Authorization status | `AUTHORIZED` is required to pass B1 |
 | Conclusion | `APPROVED` is required to pass B1 |
-| Recipient, Sender, Proposed route, Provider/source, Evidence reference, Interpretation, Restrictions, Attribution requirements | non-empty and not a placeholder. Write `None stated` if the provider stated none. |
+| Recipient, Sender, Proposed route, Provider/source, Evidence reference, Interpretation, Conditions, Restrictions, Attribution requirements | non-empty and not a placeholder. Write `None stated` if the provider stated none. |
 
 The `## Exact provider wording` section must contain at least one non-empty `> ` quoted line.
 
@@ -68,6 +69,7 @@ Route categories:
 
 ---
 
+Source class: EXTERNAL_PROVIDER_AUTHORIZATION
 Protocol version: v1.0
 Dataset: RSNA-ASNR-MICCAI-BraTS-2021
 DOI: 10.7937/jc8x-9874
@@ -81,6 +83,7 @@ Provider/source: <FILL: e.g. TCIA Help Desk, name and role of responder>
 Response date: <FILL: date the written response was received, YYYY-MM-DD>
 Evidence reference: <FILL: ticket number, message subject and date, or official document URL and version>
 Interpretation: <FILL: one sentence stating what the response permits, without going beyond its wording>
+Conditions: <FILL: conditions the approval depends on, quoted or closely tied to the wording; or None stated>
 Restrictions: <FILL: access, storage, retention, deletion or sharing restrictions stated; or None stated>
 Attribution requirements: <FILL: citations and acknowledgements required; or None stated>
 Approved route: <FILL: exact route text; identical to --approved-route>

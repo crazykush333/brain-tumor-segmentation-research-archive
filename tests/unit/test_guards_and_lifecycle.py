@@ -12,13 +12,30 @@ from brats_uncertainty.evaluation.guards import ACTION_REQUIREMENTS, check_actio
 from brats_uncertainty.evaluation.ledger import read_ledger, record_evaluation
 from brats_uncertainty.evaluation.status import load_status, validate_status
 from brats_uncertainty.experiments.metadata import ExperimentMetadata, load_experiment
-from tests.conftest import make_status_repo
+from tests.conftest import (
+    OWNER_ROUTE,
+    make_status_repo,
+    make_verbatim_status_repo,
+    pending_raw,
+)
 
 
 @pytest.mark.parametrize("action", sorted(ACTION_REQUIREMENTS))
-def test_every_gated_action_is_blocked_now(repo_root: Path, action: str) -> None:
+def test_every_gated_action_is_blocked_before_b1(tmp_path: Path, action: str) -> None:
+    pending = make_verbatim_status_repo(tmp_path / "pending")  # pre-B1 baseline
+    with pytest.raises(ResearchGateError, match="not authorized"):
+        require_action(action, pending)
+
+
+@pytest.mark.parametrize("action", sorted(set(ACTION_REQUIREMENTS) - {"acquire_data"}))
+def test_every_action_beyond_b2_is_blocked_now(repo_root: Path, action: str) -> None:
+    """Real state: B1 PASSED (owner-approved alternative), B2 ready; everything else blocked."""
     with pytest.raises(ResearchGateError, match="not authorized"):
         require_action(action, repo_root)
+
+
+def test_only_b2_acquisition_is_permitted_by_the_real_gates(repo_root: Path) -> None:
+    assert check_action("acquire_data", repo_root) == []  # B2 AUTHORIZED, not executed
 
 
 def test_unknown_action_rejected(repo_root: Path) -> None:
@@ -30,18 +47,20 @@ def test_current_status_matches_reported_state(repo_root: Path) -> None:
     st = load_status(repo_root)
     assert st.headline == "Protocol v1.0 frozen. Experimental execution pending."
     assert all(st.gate(f"A{i}").status in ("CLOSED", "OWNER_WAIVED") for i in range(1, 10))
-    assert st.gate("B1").status == "PENDING"
+    assert st.gate("B1").status == "PASSED"  # owner-approved alternative (amendment v1.0-A1)
+    assert st.gate("B1").evidence == "docs/data/B1_EVIDENCE_2026-10-01.md"
+    assert st.gate("B2").status == "AUTHORIZED"  # ready, not executed
     for gid in (f"C{i}" for i in range(1, 7)):
         assert st.gate(gid).status == "NOT_STARTED", gid
     for gid in (f"D{i}" for i in range(1, 7)):
         assert st.gate(gid).status == "NOT_STARTED", gid
-    for gid in (f"B{i}" for i in range(2, 13)):
+    for gid in (f"B{i}" for i in range(3, 13)):
         assert st.gate(gid).status == "LOCKED", gid
     assert st.results_available is False
     raw = st.raw
     assert raw["data"]["acquired"] is False
-    assert raw["data"]["authorization"] == "PENDING"
-    assert raw["data"]["approved_route"] is None
+    assert raw["data"]["authorization"] == "APPROVED"
+    assert raw["data"]["approved_route"] == OWNER_ROUTE
     assert raw["training"]["status"] == "NOT_STARTED"
     assert raw["evaluation"] == {"internal": "NOT_STARTED", "external": "NOT_STARTED"}
     assert raw["results"]["status"] == "UNAVAILABLE"
@@ -57,7 +76,7 @@ def test_guard_passes_only_when_gates_closed(tmp_path: Path) -> None:
 
 
 def test_status_rejects_closure_without_evidence(tmp_path: Path, repo_root: Path) -> None:
-    raw = yaml.safe_load((repo_root / "docs/project_status.yaml").read_text(encoding="utf-8"))
+    raw = pending_raw()
     raw["gates"][9]["status"] = "PASSED"  # B1 without evidence
     with pytest.raises(ConfigError, match="without evidence"):
         validate_status(raw, repo_root)

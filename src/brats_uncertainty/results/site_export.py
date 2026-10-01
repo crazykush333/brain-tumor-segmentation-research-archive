@@ -13,10 +13,16 @@ artifacts are refused.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from brats_uncertainty import __version__
+from brats_uncertainty.data.evidence import (
+    SOURCE_CLASS_EXTERNAL,
+    SOURCE_CLASS_OWNER,
+    b1_source_class,
+)
 from brats_uncertainty.data.records import protocol_count_targets, read_record_body
 from brats_uncertainty.errors import ProvenanceError
 from brats_uncertainty.evaluation.status import load_status
@@ -77,17 +83,84 @@ _GATE_ROWS = (
         "B2 Data acquisition",
         "official files via the B1-approved route; inventory hashed",
     ),
-    ("b3", "B3", "B3 Crosswalk hash", "exact SHA-256 of BraTS2021_MappingToTCIA.xlsx"),
+    ("b3", "B3", "B3 Mapping-file hash", "exact SHA-256 of BraTS2021_MappingToTCIA.xlsx"),
     ("b4", "B4", "B4 UCSF-PDGM metadata hash", "exact SHA-256 of UCSF-PDGM-metadata_v5.csv"),
-    ("b5", "B5", "B5 Raw data manifest", "integrity audit + hashed manifest"),
+    ("b5", "B5", "B5 Data manifest", "integrity audit + hashed manifest"),
     (
         "b6",
         "B6",
         "B6 Count verification",
         "counts derived from the hashed crosswalk vs protocol targets",
     ),
-    ("b7", "B7", "B7 Patient grouping", "same-patient screen; locked until B6 has passed"),
+    ("b7", "B7", "B7 Patient grouping", "T_screen and same-patient screen; after B6 has passed"),
+    ("b8", "B8", "B8 Manual review", "flagged pairs reviewed"),
+    ("b9", "B9", "B9 Patient groups", "patient groups frozen (IDs only)"),
+    ("b10", "B10", "B10 Final split", "created once"),
+    ("b11", "B11", "B11 Split assertions", "split assertions pass"),
+    ("b12", "B12", "B12 Split hashes", "split hashes recorded"),
 )
+
+
+_BASIS_LABELS = {
+    SOURCE_CLASS_OWNER: "Authorized — Owner-approved alternative",
+    SOURCE_CLASS_EXTERNAL: "Authorized — external provider authorization",
+}
+
+
+def authorization_basis(raw: dict[str, Any], repo_root: Path | None) -> str | None:
+    """Source class of the B1 evidence once B1 has passed (read from the evidence record)."""
+    b1 = next((g for g in raw["gates"] if g["id"] == "B1"), None)
+    if not b1 or b1.get("status") != "PASSED" or not b1.get("evidence") or repo_root is None:
+        return None
+    text = (repo_root / str(b1["evidence"]).split("#")[0]).read_text(encoding="utf-8")
+    return b1_source_class(text)
+
+
+def _b1_row(raw: dict[str, Any], status: str, repo_root: Path | None) -> dict[str, str]:
+    row = {"key": "b1", "label": "B1 Data route", "status": status}
+    if status != "PASSED":
+        row["detail"] = (
+            "a recorded data-route authorization is required before any data acquisition"
+        )
+        return row
+    basis = authorization_basis(raw, repo_root)
+    # B1's authorized state is PASSED in the gate lifecycle; never shown as "TCIA approved"
+    row["status"] = "ROUTE_AUTHORIZED"
+    row["status_label"] = _BASIS_LABELS.get(str(basis), "Authorized")
+    if basis == SOURCE_CLASS_OWNER:
+        row["detail"] = (
+            "owner-approved alternative permitted by the frozen B1 wording (amendment v1.0-A1); "
+            f"no external TCIA authorization is claimed. Route: {raw['data']['approved_route']}"
+        )
+    else:
+        row["detail"] = f"Route: {raw['data']['approved_route']}"
+    return row
+
+
+AMENDMENTS_DIR = Path("docs/research/protocol-amendments")
+
+
+def list_amendments(repo_root: Path) -> list[dict[str, str]]:
+    """Logged protocol amendments (one file each, see the directory README); never hand-typed."""
+    out = []
+    for p in sorted((repo_root / AMENDMENTS_DIR).glob("*.md")):
+        if p.name == "README.md":
+            continue
+        text = p.read_text(encoding="utf-8")
+        fields = dict(
+            re.findall(r"(?m)^(Amendment ID|Amendment type|Date):[ \t]*(.+?)[ \t]*$", text)
+        )
+        title = re.search(r"(?m)^# (.+)$", text)
+        out.append(
+            {
+                "id": fields.get("Amendment ID", p.stem),
+                "type": fields.get("Amendment type", ""),
+                "date": fields.get("Date", ""),
+                "title": title.group(1) if title else p.stem,
+                "file": (AMENDMENTS_DIR / p.name).as_posix(),
+            }
+        )
+    return out
 
 
 def build_overview(
@@ -122,26 +195,13 @@ def build_overview(
             "detail": "B1 record, TCIA inquiry and B1 evidence template prepared"
             + ("" if raw["data"].get("inquiry_sent") else " (inquiry not yet sent)"),
         },
-        {
-            "key": "b1",
-            "label": "B1 Data-route authorization",
-            # B1's authorized state is PASSED in the gate lifecycle; shown as "Authorized"
-            "status": "AUTHORIZED" if gate_status["B1"] == "PASSED" else gate_status["B1"],
-            "detail": "recorded external written authorization (TCIA) required before any "
-            "data acquisition",
-        },
+        _b1_row(raw, gate_status["B1"], repo_root),
     ]
     rows += [
         {"key": key, "label": label, "status": gate_status[gid], "detail": detail}
         for key, gid, label, detail in _GATE_ROWS
     ]
     rows += [
-        {
-            "key": "split",
-            "label": "Final split",
-            "status": run("B", 10, 12),
-            "detail": "gates B10-B12; created once",
-        },
         {
             "key": "training",
             "label": "Training",
@@ -262,7 +322,8 @@ def build_site_data(repo_root: str | Path) -> dict[str, Any]:
                     "inquiry_sent",
                     "statement",
                 )
-            },
+            }
+            | {"authorization_basis": authorization_basis(raw, root)},
             "project": raw.get("project", {}),
         },
         "protocol.json": {
@@ -270,6 +331,7 @@ def build_site_data(repo_root: str | Path) -> dict[str, Any]:
             "sha256": protocol.raw["protocol"]["sha256"],
             "git_tag": protocol.raw["protocol"]["git_tag"],
             "frozen_on": protocol.raw["protocol"]["frozen_on"],
+            "amendments": list_amendments(root),
             "parameters": {k: v for k, v in protocol.raw.items() if k != "protocol"},
         },
         "experiments.json": {"experiments": experiments},

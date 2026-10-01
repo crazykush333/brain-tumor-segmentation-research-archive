@@ -1,5 +1,7 @@
 # B2–B6 software readiness: final sign-off
 
+> **Snapshot of 2026-09-30.** The status tables below describe the state at sign-off. Since 2026-10-01, B1 has been AUTHORIZED through the owner-approved alternative (amendment v1.0-A1; external provider authorization NONE) and B2 is AUTHORIZED (ready, not executed). For the current state see [B1_DATA_ROUTE_AUTHORIZATION.md](B1_DATA_ROUTE_AUTHORIZATION.md).
+
 **Result: SOFTWARE_B2_B6_READY**, meaning the software infrastructure is technically ready to execute *authorized* B2–B6 workflows. This is a statement about **software**, not about the study.
 
 **No scientific experiment step has been completed.** No real data have been acquired. B2–B6 have **not** been executed on real data. No real B3/B4 hash, B5 manifest or B6 count verification exists. Real-data execution remains **BLOCKED** pending B1 data-route authorization.
