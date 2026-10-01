@@ -22,11 +22,16 @@ def main() -> int:
     p.add_argument("--dataset-id", required=True, type=int)
     p.add_argument("--arm", required=True, choices=["A", "B"])
     p.add_argument("--seed", required=True, type=int, choices=[0, 1, 2])
+    p.add_argument(
+        "--results-root", required=True, help="parent of the per-run nnUNet_results folders"
+    )
     p.add_argument("--execute", action="store_true")
     a = p.parse_args()
     require_action("train_main", find_repo_root())
     run = RunSpec(a.arm, a.seed)
-    cmd, env = train_command(a.dataset_id, run), train_environment(run)
+    # per-run results root: the three seeds of an arm must not share one nnUNet_results
+    cmd, env = train_command(a.dataset_id, run), train_environment(run, a.results_root)
+    # resumable, recorded execution: `brats-uncertainty job-run JOB-0x ...` (compute.jobs)
     print(" ".join(cmd), env)
     if not a.execute:
         return 0

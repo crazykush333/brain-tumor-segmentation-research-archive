@@ -150,6 +150,8 @@ def list_amendments(repo_root: Path) -> list[dict[str, str]]:
         fields = dict(
             re.findall(r"(?m)^(Amendment ID|Amendment type|Date):[ \t]*(.+?)[ \t]*$", text)
         )
+        if "Amendment ID" not in fields:
+            continue  # administrative entries are indexed in the README, not listed as amendments
         title = re.search(r"(?m)^# (.+)$", text)
         out.append(
             {

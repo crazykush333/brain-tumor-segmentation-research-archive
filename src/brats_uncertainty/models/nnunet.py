@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from brats_uncertainty.errors import ProtocolDeviationError
@@ -109,9 +110,13 @@ def plan_and_preprocess_command(dataset_id: int) -> list[str]:
     ]
 
 
-def train_command(dataset_id: int, run: RunSpec) -> list[str]:
-    """Training command. The seed is passed through the environment (see trainers)."""
-    return [
+def train_command(dataset_id: int, run: RunSpec, *, resume: bool = False) -> list[str]:
+    """Training command. The seed is passed through the environment (see trainers).
+
+    ``resume`` appends nnU-Net's ``--c`` (continue from the run's latest checkpoint);
+    it is set only by the job runner after it has found that checkpoint.
+    """
+    cmd = [
         "nnUNetv2_train",
         str(dataset_id),
         PROTOCOL_CONFIGURATION,
@@ -119,11 +124,25 @@ def train_command(dataset_id: int, run: RunSpec) -> list[str]:
         "-tr",
         run.trainer,
     ]
+    return [*cmd, "--c"] if resume else cmd
 
 
-def train_environment(run: RunSpec) -> dict[str, str]:
-    """Environment variables consumed by the guarded trainers."""
-    return {"BRATS_UNC_SEED": str(run.seed), "BRATS_UNC_ARM": run.arm}
+def run_results_dir(results_root: str | Path, run: RunSpec) -> Path:
+    """Per-run ``nnUNet_results`` folder.
+
+    nnU-Net derives its output folder from dataset/trainer/plans/configuration/fold
+    only, so the three seeds of one arm would overwrite each other in a shared
+    ``nnUNet_results``. Each run therefore gets its own root.
+    """
+    return Path(results_root) / run.run_id
+
+
+def train_environment(run: RunSpec, results_root: str | Path | None = None) -> dict[str, str]:
+    """Environment variables consumed by the guarded trainers (and nnU-Net's results root)."""
+    env = {"BRATS_UNC_SEED": str(run.seed), "BRATS_UNC_ARM": run.arm}
+    if results_root is not None:
+        env["nnUNet_results"] = str(run_results_dir(results_root, run))
+    return env
 
 
 @dataclass(frozen=True)

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import copy
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -143,6 +143,26 @@ class InventoryEntry:
     relpath: str
     sha256: str
     size_bytes: int
+
+
+def verify_inventory(expected: Iterable[InventoryEntry], root: str | Path) -> dict[str, list[str]]:
+    """Compare a (re-)acquired tree with a recorded B2 inventory (nothing is modified).
+
+    Ephemeral remote sessions (Kaggle/Colab) re-download the official files in every
+    session; before use, the tree must be byte-identical to the committed B2 record.
+    Returns ``missing``, ``mismatched`` (hash or size) and ``unexpected`` relpaths.
+    """
+    found = {e.relpath: e for e in inventory(root)}
+    want = {e.relpath: e for e in expected}
+    return {
+        "missing": sorted(set(want) - set(found)),
+        "mismatched": sorted(
+            r
+            for r in set(want) & set(found)
+            if (want[r].sha256, want[r].size_bytes) != (found[r].sha256, found[r].size_bytes)
+        ),
+        "unexpected": sorted(set(found) - set(want)),
+    }
 
 
 def inventory(root: str | Path) -> tuple[InventoryEntry, ...]:

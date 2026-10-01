@@ -2,4 +2,4 @@
 platform: colab
 status: "not planned as primary platform; any use requires owner approval and budget recomputation (SR8)"
 secrets: "Colab secrets / environment only; never committed"
-data_storage: "PENDING B1"
+data_storage: "as kaggle.yaml: direct official TCIA download into ephemeral private runtime storage only (administrative entry 2026-10-01)"

@@ -21,3 +21,4 @@ Rules (protocol v1.0, "Freeze rule" and §25):
 | Date | Type | Gate / sections | File | Test data seen? |
 |---|---|---|---|---|
 | 2026-10-01 | Amendment v1.0-A1 (DATA-ROUTE / OPERATIONAL) | B1; §5.1 operational data route; SR7 | [2026-10-01_B1_data-route.md](2026-10-01_B1_data-route.md) | No |
+| 2026-10-01 | Administrative entry (OPERATIONAL; no design change) | Remote compute environment for the B1 route; §17, §24; SR8 | [2026-10-01_compute-environment.md](2026-10-01_compute-environment.md) | No |

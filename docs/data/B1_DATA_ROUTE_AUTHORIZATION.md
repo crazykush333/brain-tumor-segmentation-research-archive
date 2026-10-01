@@ -47,7 +47,7 @@ The routes considered on 2026-09-29/30 for the TCIA inquiry are **not** approved
 | Category | Route | Status |
 |---|---|---|
 | **A** | Private, access-restricted computational storage on a third-party platform, such as a private Kaggle dataset | **Not authorized.** This is private third-party re-hosting, which still needs TCIA confirmation under protocol §5.1. No such confirmation has been requested or received. |
-| **B** | Runtime-only acquisition into third-party compute with no persistent copy | Not separately authorized. The approved route covers access into the study's private environment only. |
+| **B** | Runtime-only acquisition into third-party compute with no persistent copy | Covered only as part of the approved route: an owner-controlled private GPU environment (private VM, or a private Kaggle or Colab session) that receives the data directly from TCIA into its private, ephemeral storage, with no dataset, mirror or upload. See the administrative entry [2026-10-01_compute-environment.md](../research/protocol-amendments/2026-10-01_compute-environment.md) and [REMOTE_COMPUTE.md](../reproducibility/REMOTE_COMPUTE.md). |
 | **C** | Another route approved by TCIA in writing | None exists |
 
 ## 3. Official sources (verified 2026-09-29; re-verified 2026-09-30 and 2026-10-01)

@@ -20,7 +20,17 @@ GATED = [
         "--out",
         "nonexistent.json",
     ],
-    ["scripts/experiments/train.py", "--dataset-id", "1", "--arm", "B", "--seed", "0"],
+    [
+        "scripts/experiments/train.py",
+        "--dataset-id",
+        "1",
+        "--arm",
+        "B",
+        "--seed",
+        "0",
+        "--results-root",
+        "x",
+    ],
     [
         "scripts/data/acquire.py",
         "--adapter",

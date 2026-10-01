@@ -658,8 +658,14 @@ def test_no_environment_or_hidden_bypass_in_gated_code() -> None:
                 "subprocess",
             ):
                 assert forbidden not in text.lower(), (py, forbidden)
-    net = [py for py in SRC.rglob("*.py") if "urlopen" in py.read_text(encoding="utf-8")]
-    assert [p.name for p in net] == ["acquisition.py"]  # the single, gated network call
+    net = sorted(
+        (py for py in SRC.rglob("*.py") if "urlopen" in py.read_text(encoding="utf-8")),
+        key=lambda p: p.name,
+    )
+    # the single gated data download, plus the compute probe's HEAD-only reachability check
+    assert [p.name for p in net] == ["acquisition.py", "probe.py"]
+    probe = (SRC / "compute" / "probe.py").read_text(encoding="utf-8")
+    assert probe.count("urlopen(") == 1 and 'method="HEAD"' in probe  # downloads nothing
     for tree_dir in ("scripts", "website"):
         root = SRC.parents[1] / tree_dir
         for f in root.rglob("*"):
@@ -672,7 +678,25 @@ def test_no_environment_or_hidden_bypass_in_gated_code() -> None:
             ):
                 t = f.read_text(encoding="utf-8", errors="ignore")
                 assert "urlopen" not in t and "fetch(" not in t and "requests." not in t, f
-    assert not list(SRC.parents[1].rglob("*.ipynb"))
+    # notebooks only as the generated remote-compute package (equality with the generator and
+    # official-host-only URLs are tested in test_remote_compute.py); no alternative tooling
+    notebooks = [
+        p
+        for p in SRC.parents[1].rglob("*.ipynb")
+        if ".venv" not in p.parts and "node_modules" not in p.parts
+    ]
+    for nb in notebooks:
+        assert nb.parent == SRC.parents[1] / "experiments" / "kaggle", nb
+        t = nb.read_text(encoding="utf-8").lower()
+        for forbidden in (
+            "requests.",
+            "import kaggle",
+            "kaggle datasets",
+            "kaggleapi",
+            "boto",
+            "wget ",
+        ):
+            assert forbidden not in t, (nb.name, forbidden)
 
 
 def test_record_constructor_hash_shape_is_validated() -> None:

@@ -218,6 +218,60 @@ def _cmd_verify_checksums(root: Path, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_compute_preflight(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.compute.probe import compute_preflight
+    from brats_uncertainty.utils.io import write_json
+
+    report = compute_preflight(
+        root,
+        work_dir=Path(args.work_dir) if args.work_dir else None,
+        job=args.job,
+        offline=args.offline,
+    )
+    print(report.describe())
+    if args.json:
+        write_json(args.json, report.to_dict(), overwrite=True)
+    return 0 if report.status != "NOT_READY" else 1
+
+
+def _cmd_job_run(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.compute.jobs import load_jobs, run_training_job
+
+    job = load_jobs(root)[args.job]
+    if job.kind != "training":
+        raise ConfigError(
+            f"{args.job} ({job.kind}) runs as notebook/CLI steps; see docs/reproducibility/"
+            "REMOTE_COMPUTE.md"
+        )
+    record = run_training_job(
+        root,
+        job,
+        dataset_id=args.dataset_id,
+        results_root=Path(args.results_root),
+        state_root=Path(args.state_root),
+        manifest_sha256=args.manifest_sha256,
+        split_sha256=args.split_sha256,
+        allow_restart=args.restart_without_checkpoint,
+    )
+    print(f"{args.job}: {record['status']} after {len(record['attempts'])} attempt(s)")
+    return 0 if record["status"] == "COMPLETED" else 1
+
+
+def _cmd_verify_inventory(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.data.records import read_acquisition_record, verify_inventory
+
+    rec = read_acquisition_record(Path(args.record))
+    diff = verify_inventory(rec.inventory, Path(args.root))
+    bad = {k: v for k, v in diff.items() if v}
+    if bad:
+        print(f"MISMATCH against the B2 inventory: { {k: len(v) for k, v in bad.items()} }")
+        for k, v in bad.items():
+            print(f"  {k}: {v[:5]}")
+        return 1
+    print(f"tree identical to the B2 inventory ({len(rec.inventory)} files)")
+    return 0
+
+
 def _cmd_storage_preflight(root: Path, args: argparse.Namespace) -> int:
     from brats_uncertainty.data.preflight import GIB, storage_preflight
 
@@ -388,6 +442,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--metadata-mib", type=float, default=16.0, help="allowance for the B3/B4 metadata files"
     )
     sp.set_defaults(func=_cmd_storage_preflight)
+    cp = sub.add_parser(
+        "compute-preflight",
+        help="probe this environment (GPU/CUDA/RAM/disk/packages/internet) and classify it",
+    )
+    cp.add_argument("--job", default=None, help="check against one job, e.g. JOB-01 or JOB-02")
+    cp.add_argument("--work-dir", default=None, help="where data/checkpoints would be written")
+    cp.add_argument("--offline", action="store_true", help="skip the HEAD-request internet check")
+    cp.add_argument("--json", default=None, help="also write the report as JSON")
+    cp.set_defaults(func=_cmd_compute_preflight)
+    jr = sub.add_parser("job-run", help="run/resume one training job (gated: train_main)")
+    jr.add_argument("job", help="JOB-02 ... JOB-07")
+    jr.add_argument("--dataset-id", type=int, required=True, help="nnU-Net dataset id")
+    jr.add_argument("--results-root", required=True, help="per-run nnUNet_results parent")
+    jr.add_argument("--state-root", required=True, help="where run records are kept")
+    jr.add_argument("--manifest-sha256", required=True, help="B5 manifest_sha256")
+    jr.add_argument("--split-sha256", required=True, help="B12 split hash")
+    jr.add_argument(
+        "--restart-without-checkpoint",
+        action="store_true",
+        help="explicitly restart an earlier attempt that left no checkpoint (recorded)",
+    )
+    jr.set_defaults(func=_cmd_job_run)
+    vi = sub.add_parser(
+        "verify-inventory", help="check a (re-)acquired tree against the committed B2 inventory"
+    )
+    vi.add_argument("--record", required=True, help="B2 acquisition record")
+    vi.add_argument("--root", required=True, help="storage root of the re-acquired files")
+    vi.set_defaults(func=_cmd_verify_inventory)
     dc = sub.add_parser("derive-counts", help="B6: counts from the hashed crosswalk (gated)")
     dc.add_argument("--crosswalk", required=True)
     dc.add_argument("--b3-record", required=True)
