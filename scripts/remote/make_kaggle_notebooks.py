@@ -126,6 +126,12 @@ NOTEBOOKS: dict[str, dict[str, object]] = {
                 "## Result\nDownload `/kaggle/working/export/` (probe JSON) and the cell "
                 "output. They contain no data and no credentials.",
             ),
+            (
+                "code",
+                "# STOP: this notebook only probes. No data transfer, no research step.\n"
+                'print("Probe finished. Nothing was downloaded. Continue with notebook 01 only '
+                'after the owner has reviewed the probe output.")',
+            ),
         ],
     ),
     "01_data_access_and_b2.ipynb": _nb(
@@ -352,8 +358,17 @@ NOTEBOOKS: dict[str, dict[str, object]] = {
             ),
             (
                 "code",
-                "!brats-uncertainty export-artifacts --source /kaggle/working/results "
-                "--dest {EXPORT}/public",
+                "# STOP if there are no actual result artifacts: nothing is ever invented\n"
+                'RESULTS = "/kaggle/working/results"\n'
+                "has_results = os.path.isdir(RESULTS) and any(\n"
+                '    name.endswith(".metrics.json") for _, _, names in os.walk(RESULTS) '
+                "for name in names\n"
+                ")\n"
+                'assert has_results, "no *.metrics.json result artifacts exist: stop here"',
+            ),
+            (
+                "code",
+                "!brats-uncertainty export-artifacts --source {RESULTS} --dest {EXPORT}/public",
             ),
         ],
     ),

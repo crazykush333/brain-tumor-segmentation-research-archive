@@ -446,6 +446,45 @@ def test_notebooks_are_generated_and_safe() -> None:
         assert "assert r.returncode == 0" in code_cells[2], name
 
 
+def _python_of(cell: str) -> str:
+    """Notebook cell -> plain Python: IPython shell/magic lines become `pass` (indent kept)."""
+    out = []
+    for line in cell.splitlines():
+        stripped = line.lstrip()
+        indent = line[: len(line) - len(stripped)]
+        out.append(f"{indent}pass" if stripped.startswith(("!", "%")) else line)
+    return "\n".join(out) + "\n"
+
+
+def test_notebook_code_cells_are_valid_python() -> None:
+    for nb_path in sorted((REPO_ROOT / "experiments/kaggle").glob("*.ipynb")):
+        nb = json.loads(nb_path.read_text(encoding="utf-8"))
+        assert nb["nbformat"] == 4 and nb["cells"][0]["cell_type"] == "markdown"
+        for i, cell in enumerate(nb["cells"]):
+            assert cell["cell_type"] in ("markdown", "code"), (nb_path.name, i)
+            if cell["cell_type"] == "code":
+                assert cell["outputs"] == [] and cell["execution_count"] is None
+                compile(_python_of(cell["source"]), f"{nb_path.name}[{i}]", "exec")
+
+
+def test_every_notebook_has_explicit_gate_or_stop_behaviour() -> None:
+    kdir = REPO_ROOT / "experiments/kaggle"
+
+    def code(name: str) -> list[str]:
+        cells = json.loads((kdir / name).read_text(encoding="utf-8"))["cells"]
+        return [c["source"] for c in cells if c["cell_type"] == "code"]
+
+    for name in sorted(p.name for p in kdir.glob("*.ipynb")):
+        cells = code(name)
+        assert 'assert REPO_URL, "set REPO_URL"' in cells[0], name  # stops without a target
+        assert 'assert COMMIT, "set COMMIT"' in cells[0], name
+    assert "STOP: this notebook only probes" in code("00_environment_probe.ipynb")[-1]
+    export = code("06_results_export.ipynb")
+    stop = next(i for i, c in enumerate(export) if "no *.metrics.json result artifacts" in c)
+    run = next(i for i, c in enumerate(export) if "export-artifacts" in c)
+    assert stop < run  # export only after real result artifacts are confirmed to exist
+
+
 def test_amendment_list_excludes_administrative_entries(repo_root: Path) -> None:
     assert [a["id"] for a in list_amendments(repo_root)] == ["v1.0-A1"]
     assert (
