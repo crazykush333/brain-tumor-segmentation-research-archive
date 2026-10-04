@@ -148,6 +148,15 @@ The logic lives in `src/brats_uncertainty/orchestration/` and is unit-tested.
   allow-listed paths are staged; the repository scan runs before every commit; no
   attribution trailers; pushes are fast-forward only. A token, if needed, comes from
   `GITHUB_TOKEN` through a one-shot credential helper and is never stored.
-- **Not yet implemented executors** (the runner stops there with that message): the
-  EXP-001 measurement harness, validation inference + SR2, C1-C6, the internal-test and
-  external evaluations, statistics/figures.
+- **Executors (all implemented, synthetic-tested):** EXP-001 harness (timing runs, R1
+  resume test, I1 inference timing, GPU monitor, disk; `compute/pilot_harness.py`,
+  `compute/pilot_run.py`), D6 budget (SR1/SR6/SR8), training (250 or 150 epochs per D6),
+  validation + SR2, C5 freeze, C4 HOI grouping, C1–C3 BraTS-Africa checks, C6 tag,
+  internal/external evaluations and all analyses, figures and tables (`study/*`), run
+  from a clean `eval-v1` worktree (`evaluate-set`, `analyze-study`), public-safe export
+  and the website build. The nnU-Net inference adapter (`study/nnunet_inference.py`) is
+  first exercised by EXP-001's inference-timing run on the pinned version.
+- **Owner stops built in:** implementation-choice confirmations due before a step
+  (REPRODUCIBILITY.md §4), the B8 and C4 human reviews, the D6 decision when a spec
+  quantity is not measurable on the platform or SR1/SR6 reach "consult the owner", the
+  HD95 evaluator pin (C6), and the BraTS-Africa data route (C1; SR7).

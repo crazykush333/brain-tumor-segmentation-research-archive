@@ -101,6 +101,8 @@ class Context:
     ops: Ops
     offline: bool = False
     approvals: frozenset[str] = frozenset()  # explicit owner approvals given on the CLI
+    process_runner: Any = None  # EXP-001 process runner (default: real subprocesses)
+    ensemble_factory: Any = None  # (kind, arm, cases) -> EnsembleSource (default: nnU-Net)
     today: str = field(default_factory=lambda: datetime.now(UTC).date().isoformat())
 
     @property
@@ -189,6 +191,7 @@ def gate_step_executor(
     produce: Callable[[Context], list[Path]],
     *,
     describe: str,
+    confirm: str | None = None,
 ) -> Callable[[Context], Outcome]:
     def execute(ctx: Context) -> Outcome:
         st = ctx.ops.gate_status(gid)
@@ -206,6 +209,10 @@ def gate_step_executor(
                 "gate-transition` (FAILED -> BLOCKED -> AUTHORIZED); the runner never "
                 "reopens a failed gate itself",
             )
+        if confirm is not None:
+            from brats_uncertainty.orchestration.study_steps import require_confirmations
+
+            require_confirmations(ctx, confirm)
         if st == "AUTHORIZED":
             ctx.ops.transition(gid, "RUNNING")
             ctx.ops.milestone(f"chore(gates): {gid} RUNNING ({describe})")
@@ -691,37 +698,6 @@ def execute_d2(ctx: Context) -> Outcome:
     return close_cd_gate(ctx, "D2", ev, "approved data route (B1)")
 
 
-def not_implemented(what: str, needed: str) -> Callable[[Context], Outcome]:
-    def execute(_: Context) -> Outcome:
-        raise StepBlocked(
-            f"executor not implemented: {what}",
-            f"implement and test (synthetic) the executor: {needed}; then re-run with --resume",
-        )
-
-    return execute
-
-
-def execute_pilot(ctx: Context) -> Outcome:
-    """EXP-001 (D3-D5 constraints are checked on the selected pool before anything runs)."""
-    from brats_uncertainty.orchestration.pilot import select_pilot_cases, verify_pilot_pool
-
-    rows = crosswalk_rows(ctx)
-    cfg = read_yaml(ctx.repo_root / "configs/experiments/EXP-001.yaml")["pilot"]
-    cases = select_pilot_cases(rows, n=int(cfg["n_cases"]), seed=int(cfg["selection_seed"]))
-    verify_pilot_pool(cases, rows)
-    out = ctx.repo_root / ctx.cfg["paths"]["exp001_dir"]
-    measurements = out / "measurements.json"
-    if not measurements.is_file():
-        raise StepBlocked(
-            "executor not implemented: EXP-001 measurement harness (spec §2: timing runs "
-            "P1-P5, resume test R1, inference timing I1, GPU monitor, disk)",
-            "implement and test the pilot measurement harness against the pinned nnU-Net; it "
-            f"must write {ctx.rel(measurements)}; then re-run with --resume",
-            pilot_cases=cases,
-        )
-    return Outcome(PASSED, "EXP-001 measurements recorded", evidence=[ctx.rel(measurements)])
-
-
 def _pilot_constraint(gid: str, text: str) -> Callable[[Context], Outcome]:
     def execute(ctx: Context) -> Outcome:
         ev = ctx.repo_root / ctx.cfg["paths"]["exp001_dir"] / "constraints.json"
@@ -735,23 +711,6 @@ def _pilot_constraint(gid: str, text: str) -> Callable[[Context], Outcome]:
     return execute
 
 
-def execute_d6(ctx: Context) -> Outcome:
-    from brats_uncertainty.orchestration.budget import PilotMeasurements, decide
-
-    out = ctx.repo_root / ctx.cfg["paths"]["exp001_dir"]
-    m = PilotMeasurements(**read_json(out / "measurements.json")["projection_inputs"])
-    decision = decide(m)
-    path = out / "budget_projection.json"
-    if not path.is_file():
-        write_json(path, decision.as_dict())
-    if decision.status != "FEASIBLE":
-        raise StepReview(
-            "D6: compute projection requires the owner (SR1/SR6 step 4 or acceptance failure)",
-            f"owner decision on {ctx.rel(path)}: {decision.acceptance_failures or 'consult'}",
-        )
-    return close_cd_gate(ctx, "D6", path, "SR1/SR6/SR8 applied before main training")
-
-
 # --------------------------------------------------------------------------- training
 def training_executor(job_id: str) -> Callable[[Context], Outcome]:
     def execute(ctx: Context) -> Outcome:
@@ -759,15 +718,13 @@ def training_executor(job_id: str) -> Callable[[Context], Outcome]:
         from brats_uncertainty.models.nnunet import run_namespace
 
         job = load_jobs(ctx.repo_root)[job_id]
-        budget = read_json(
-            ctx.repo_root / ctx.cfg["paths"]["exp001_dir"] / "budget_projection.json"
+        from brats_uncertainty.orchestration.study_steps import (
+            _set_status,
+            planned_epochs,
+            require_confirmations,
         )
-        if int(budget["final"]["plan"]["epochs"]) != 250:
-            raise StepBlocked(
-                f"{job_id}: SR1/SR6 set {budget['final']['plan']['epochs']} epochs",
-                "implement and verify the 150-epoch trainer variants (protocol SR1/SR6 step 3) "
-                "before training",
-            )
+
+        epochs = planned_epochs(ctx)  # 250, or 150 under SR1/SR6 (D6)
         results_root = ctx.work_dir / "nnunet_results"
         run_dir = run_namespace(results_root, job.experiment_id, job.run)
         manifest = read_manifest(run_dir)
@@ -791,6 +748,15 @@ def training_executor(job_id: str) -> Callable[[Context], Outcome]:
                     f"owner approval to restart it from scratch: re-run with --approve-restart "
                     f"{job_id} (recorded in the run manifest)",
                 )
+        require_confirmations(ctx, job_id.replace("JOB", "TRAIN"))
+        _set_status(
+            ctx,
+            {("training", "status"): "IN_PROGRESS"},
+            message="chore(status): training IN_PROGRESS",
+        )
+        from brats_uncertainty.models.trainer_registration import register_trainers
+
+        register_trainers()
         dataset_id, provenance = _ensure_nnunet_dataset(ctx)
         b5 = read_json(ctx.records / "B5_manifest.json")
         hashes = read_json(ctx.splits / "split_hashes.json")
@@ -806,6 +772,7 @@ def training_executor(job_id: str) -> Callable[[Context], Outcome]:
             split_sha256=str(hashes["split_all_csv_sha256"]),
             resume=resume,
             restart_without_checkpoint=restart,
+            epochs=epochs,
         )
         if rec["status"] != "COMPLETED":
             raise StepBlocked(
@@ -867,6 +834,8 @@ def _ensure_nnunet_dataset(ctx: Context) -> tuple[int, Path]:
 # --------------------------------------------------------------------------- registry
 def build_steps() -> list[Step]:
     """All steps in protocol order. ``needs`` are runner-level dependencies."""
+    from brats_uncertainty.orchestration import study_steps as ss
+
     b = gate_step_executor
     steps = [
         Step(
@@ -884,7 +853,7 @@ def build_steps() -> list[Step]:
             "Official data acquired via the approved route",
             "B",
             ("ENV",),
-            b("B2", produce_b2, describe="official acquisition"),
+            b("B2", produce_b2, describe="official acquisition", confirm="B2"),
             gate="B2",
             job="JOB-01",
         ),
@@ -917,7 +886,7 @@ def build_steps() -> list[Step]:
             "Counts from the hashed crosswalk (1,251 / 511 / 740)",
             "B",
             ("B5",),
-            b("B6", produce_b6, describe="cohort counts"),
+            b("B6", produce_b6, describe="cohort counts", confirm="B6"),
             gate="B6",
         ),
         Step(
@@ -934,7 +903,7 @@ def build_steps() -> list[Step]:
             "Manual review of flagged pairs (human)",
             "B",
             ("B7",),
-            b("B8", produce_b8, describe="manual review record"),
+            b("B8", produce_b8, describe="manual review record", confirm="B8"),
             gate="B8",
         ),
         Step(
@@ -950,7 +919,7 @@ def build_steps() -> list[Step]:
             "Final split created once (70/10/20, seed 20260927)",
             "B",
             ("B9",),
-            b("B10", produce_b10, describe="final split"),
+            b("B10", produce_b10, describe="final split", confirm="B10"),
             gate="B10",
         ),
         Step(
@@ -974,7 +943,7 @@ def build_steps() -> list[Step]:
             "EXP-001 compute pilot (measurements only)",
             "D",
             ("B6", "D1", "D2"),
-            execute_pilot,
+            ss.execute_pilot,
             job="JOB-PILOT",
         ),
         Step(
@@ -1006,7 +975,7 @@ def build_steps() -> list[Step]:
             "SR1/SR6/SR8 applied before main training",
             "D",
             ("D3", "D4", "D5"),
-            execute_d6,
+            ss.execute_d6,
             gate="D6",
         ),
     ]
@@ -1035,10 +1004,7 @@ def build_steps() -> list[Step]:
             "Validation inference; SR2 (arm A full-input ET Dice >= 0.75)",
             "eval",
             train,
-            not_implemented(
-                "validation inference + SR2",
-                "3-member ensembles, C5 conditions, ET Dice, SR2 stop rule",
-            ),
+            ss.execute_validation,
             job="JOB-08",
         ),
         Step(
@@ -1046,7 +1012,7 @@ def build_steps() -> list[Step]:
             "Validation-derived tau_q and I frozen",
             "C",
             ("VALIDATION",),
-            not_implemented("C5 threshold freeze", "statistics.thresholds on validation C4 units"),
+            ss.execute_c5,
             gate="C5",
         ),
         Step(
@@ -1054,82 +1020,69 @@ def build_steps() -> list[Step]:
             "HOI patient grouping frozen",
             "C",
             ("B9",),
-            not_implemented("C4 HOI screen", "§6.2 screen within the 511 HOI cases + review"),
+            ss.execute_c4,
             gate="C4",
+            job="JOB-GROUPING",
         ),
         Step(
             "C1",
             "BraTS-Africa file-level label verification",
             "C",
             ("ENV",),
-            not_implemented("C1", "BraTS-Africa acquisition via an approved route + label check"),
+            ss.execute_c1,
             gate="C1",
         ),
         Step(
-            "C2",
-            "BraTS-Africa four-sequence verification",
-            "C",
-            ("C1",),
-            not_implemented("C2", "four-sequence check"),
-            gate="C2",
+            "C2", "BraTS-Africa four-sequence verification", "C", ("C1",), ss.execute_c2, gate="C2"
         ),
         Step(
             "C3",
             "BraTS-Africa eligible count frozen (<= 95)",
             "C",
             ("C2",),
-            not_implemented("C3", "eligible count without model output"),
+            ss.execute_c3,
             gate="C3",
         ),
-        Step(
-            "C6",
-            "Evaluation code tagged eval-v1",
-            "C",
-            ("C5",),
-            not_implemented("C6", "evaluation code complete, HD95 empty-mask check, tag eval-v1"),
-            gate="C6",
-        ),
+        Step("C6", "Evaluation code tagged eval-v1", "C", ("C5",), ss.execute_c6, gate="C6"),
         Step(
             "INTERNAL_TEST",
-            "Internal test: primary H-W analysis (once, eval-v1)",
+            "Internal test evaluated once (eval-v1)",
             "eval",
             ("C5", "C6"),
-            not_implemented(
-                "internal-test evaluation",
-                "per-unit metric CSV from tagged code, then scripts/evaluation/analyze_primary.py",
-            ),
+            ss.evaluation_executor("internal_test"),
             job="JOB-08",
         ),
         Step(
             "EXTERNAL_HOI",
-            "UPenn HOI evaluation (once, eval-v1)",
+            "UPenn HOI evaluated once (eval-v1)",
             "eval",
-            ("C4", "C5", "C6"),
-            not_implemented("HOI evaluation", "tagged external evaluation"),
+            ("C4", "C5", "C6", "INTERNAL_TEST"),
+            ss.evaluation_executor("upenn_hoi"),
             job="JOB-08",
         ),
         Step(
             "EXTERNAL_AFRICA",
-            "BraTS-Africa evaluation (once, eval-v1)",
+            "BraTS-Africa evaluated once (eval-v1)",
             "eval",
-            ("C1", "C2", "C3", "C5", "C6"),
-            not_implemented("BraTS-Africa evaluation", "tagged external evaluation"),
+            ("C1", "C2", "C3", "C5", "C6", "INTERNAL_TEST"),
+            ss.evaluation_executor("brats_africa"),
             job="JOB-08",
         ),
         Step(
             "STATISTICS",
-            "Secondary analyses, tables and figures from result artifacts",
+            "Pre-registered analyses, figures, tables; public-safe export",
             "report",
             ("INTERNAL_TEST", "EXTERNAL_HOI", "EXTERNAL_AFRICA"),
-            not_implemented("statistics/figures", "protocol §13-§15, §19 from committed artifacts"),
+            ss.execute_statistics,
         ),
         Step(
-            "FINAL_AUDIT",
-            "Final research audit and public-safe package",
+            "WEBSITE",
+            "Website data sync and production build",
             "report",
             ("STATISTICS",),
-            _execute_final_audit,
+            ss.execute_website,
         ),
+        Step("FINAL_AUDIT", "Final research audit", "report", ("WEBSITE",), _execute_final_audit),
     ]
     return steps
 

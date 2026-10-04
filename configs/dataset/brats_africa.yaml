@@ -13,6 +13,7 @@ inclusion:
   sheet: "95 Glioma"
   excluded_sheet: "51 OtherNeoplasms"
   max_eligible: 95                 # final count frozen at C3 after file inspection
+  id_column: null                  # case-ID column header of the "95 Glioma" sheet; confirmed on the file (C1)
   eligible_count: null
 
 layout:

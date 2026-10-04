@@ -73,46 +73,100 @@ class DropoutTransform:
         return data_dict
 
 
+_EXPORTS = (
+    "DropoutTransform",
+    "nnUNetTrainer_BratsUnc_150ep",
+    "nnUNetTrainer_BratsUnc_150ep_ModalityDropout",
+    "nnUNetTrainer_BratsUnc_250ep",
+    "nnUNetTrainer_BratsUnc_250ep_ModalityDropout",
+    "nnUNetTrainer_BratsUnc_Pilot5ep",
+    "nnUNetTrainer_BratsUnc_Pilot5ep_ModalityDropout",
+)
+
+
+def _wrap_train_loader(train_loader: Any, transform: DropoutTransform) -> Any:
+    class _Wrapped:
+        def __init__(self, inner: Any) -> None:
+            self.inner = inner
+
+        def __iter__(self) -> Any:
+            return self
+
+        def __next__(self) -> Any:
+            return transform(**next(self.inner))
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.inner, name)
+
+    return _Wrapped(train_loader)
+
+
 if nnUNetTrainer is not None:  # pragma: no cover - requires nnunetv2 + torch
 
-    class nnUNetTrainer_BratsUnc_250ep(nnUNetTrainer):  # noqa: N801 - nnU-Net naming
-        """Arm A: 250 epochs, protocol seed, no modality dropout."""
+    class _BratsUncBase(nnUNetTrainer):
+        """Fixes the epoch count, checkpoint interval and protocol seed; gated."""
 
         ARM = "A"
+        EPOCHS = PROTOCOL_EPOCHS
+        SAVE_EVERY = 5
+        GATE = "train_main"
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
-            require_action("train_main")
+            require_action(self.GATE)
             self.protocol_seed = _seed_from_env()
             _seed_everything(self.protocol_seed)
             super().__init__(*args, **kwargs)
-            self.num_epochs = PROTOCOL_EPOCHS
-            self.save_every = 5
+            self.num_epochs = self.EPOCHS
+            self.save_every = self.SAVE_EVERY
 
-    class nnUNetTrainer_BratsUnc_250ep_ModalityDropout(nnUNetTrainer_BratsUnc_250ep):  # noqa: N801
-        """Arm B: as arm A plus the §10 modality-dropout policy after augmentation.
+    class _ModalityDropoutMixin:
+        """Arm B: the §10 modality-dropout policy after nnU-Net augmentation.
 
-        VERIFY against the pinned nnU-Net version: the hook below wraps the
-        training dataloader output; the exact integration point differs across
-        nnU-Net releases.
+        VERIFY against the pinned nnU-Net version: the hook wraps the training
+        dataloader output; the exact integration point differs across releases.
         """
 
         ARM = "B"
+        protocol_seed: int
 
         def get_dataloaders(self) -> Any:
-            train_loader, val_loader = super().get_dataloaders()
-            transform = DropoutTransform(self.protocol_seed)
+            train_loader, val_loader = super().get_dataloaders()  # type: ignore[misc]
+            return _wrap_train_loader(
+                train_loader, DropoutTransform(self.protocol_seed)
+            ), val_loader
 
-            class _Wrapped:
-                def __init__(self, inner: Any) -> None:
-                    self.inner = inner
+    class nnUNetTrainer_BratsUnc_250ep(_BratsUncBase):  # noqa: N801 - nnU-Net naming
+        """Arm A: 250 epochs, protocol seed, no modality dropout."""
 
-                def __iter__(self) -> Any:
-                    return self
+    class nnUNetTrainer_BratsUnc_250ep_ModalityDropout(  # noqa: N801
+        _ModalityDropoutMixin, nnUNetTrainer_BratsUnc_250ep
+    ):
+        """Arm B: as arm A plus the §10 modality-dropout policy."""
 
-                def __next__(self) -> Any:
-                    return transform(**next(self.inner))
+    class nnUNetTrainer_BratsUnc_150ep(_BratsUncBase):  # noqa: N801
+        """Arm A under SR1 / SR6 step 3: 150 epochs (all six runs switch together)."""
 
-                def __getattr__(self, name: str) -> Any:
-                    return getattr(self.inner, name)
+        EPOCHS = 150
 
-            return _Wrapped(train_loader), val_loader
+    class nnUNetTrainer_BratsUnc_150ep_ModalityDropout(  # noqa: N801
+        _ModalityDropoutMixin, nnUNetTrainer_BratsUnc_150ep
+    ):
+        """Arm B under SR1 / SR6 step 3: 150 epochs."""
+
+    class nnUNetTrainer_BratsUnc_Pilot5ep(_BratsUncBase):  # noqa: N801
+        """EXP-001 timing run (spec §1): 5 epochs, checkpoint every epoch (R1 resume test).
+
+        Gated by ``run_exp001``; pilot models are discarded (D3-D5)."""
+
+        EPOCHS = 5
+        SAVE_EVERY = 1
+        GATE = "run_exp001"
+
+    class nnUNetTrainer_BratsUnc_Pilot5ep_ModalityDropout(  # noqa: N801
+        _ModalityDropoutMixin, nnUNetTrainer_BratsUnc_Pilot5ep
+    ):
+        """EXP-001 arm-B timing run (the arm-B dropout policy, §10)."""
+
+
+# star-import (the nnU-Net shim) exports only what exists in this environment
+__all__ = [name for name in _EXPORTS if name in globals()]

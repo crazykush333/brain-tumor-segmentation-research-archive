@@ -413,6 +413,31 @@ def _cmd_master_run(root: Path, args: argparse.Namespace) -> int:
     return 2 if report.stops else 0
 
 
+def _cmd_evaluate_set(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.study.commands import evaluate_set_command
+
+    out = evaluate_set_command(
+        root, args.dataset, Path(args.work_dir), Path(args.out_dir), Path(args.main_repo)
+    )
+    print(f"{args.dataset}: {', '.join(f'{k}={v.name}' for k, v in out.items())}")
+    return 0
+
+
+def _cmd_analyze_study(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.study.commands import analyze_study_command
+
+    res = analyze_study_command(
+        root,
+        Path(args.units_dir),
+        Path(args.frozen),
+        Path(args.out_dir),
+        Path(args.main_repo),
+        Path(args.work_dir),
+    )
+    print(f"wrote {len(res['written'])} output(s); families complete: {res['families_complete']}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="brats-uncertainty", description=__doc__)
     p.add_argument(
@@ -624,6 +649,23 @@ def build_parser() -> argparse.ArgumentParser:
     mr.add_argument("--until", default=None, help="stop after this step id")
     mr.add_argument("--plan", action="store_true", help="show step statuses; execute nothing")
     mr.set_defaults(func=_cmd_master_run)
+    es = sub.add_parser(
+        "evaluate-set", help="tagged: evaluate one test/external set once (eval-v1 worktree)"
+    )
+    es.add_argument(
+        "--dataset", required=True, choices=["internal_test", "upenn_hoi", "brats_africa"]
+    )
+    es.add_argument("--work-dir", required=True)
+    es.add_argument("--out-dir", required=True)
+    es.add_argument("--main-repo", required=True, help="live checkout (gate records, ledger)")
+    es.set_defaults(func=_cmd_evaluate_set)
+    an = sub.add_parser("analyze-study", help="tagged: all pre-registered analyses from unit files")
+    an.add_argument("--units-dir", required=True)
+    an.add_argument("--frozen", required=True, help="C5 frozen record")
+    an.add_argument("--out-dir", required=True)
+    an.add_argument("--main-repo", required=True)
+    an.add_argument("--work-dir", required=True)
+    an.set_defaults(func=_cmd_analyze_study)
     return p
 
 

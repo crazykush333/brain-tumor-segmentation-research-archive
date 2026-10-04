@@ -40,6 +40,30 @@ ARMS: dict[str, str] = {
     "B": "nnUNetTrainer_BratsUnc_250ep_ModalityDropout",
 }
 FIXED_FOLD = 0
+# SR1 / SR6 step 3: "switch all six runs to 150 epochs" (protocol §20); never another value
+REDUCED_EPOCHS = 150
+ALLOWED_EPOCHS = (PROTOCOL_EPOCHS, REDUCED_EPOCHS)
+ARMS_REDUCED: dict[str, str] = {
+    "A": "nnUNetTrainer_BratsUnc_150ep",
+    "B": "nnUNetTrainer_BratsUnc_150ep_ModalityDropout",
+}
+# EXP-001 timing runs (spec §1: 5 epochs; save_every 1 so the R1 resume test has a checkpoint)
+PILOT_EPOCHS = 5
+PILOT_TRAINERS: dict[str, str] = {
+    "A": "nnUNetTrainer_BratsUnc_Pilot5ep",
+    "B": "nnUNetTrainer_BratsUnc_Pilot5ep_ModalityDropout",
+}
+
+
+def trainer_for(arm: str, epochs: int = PROTOCOL_EPOCHS) -> str:
+    """Trainer class for a protocol arm and an allowed epoch count (250, or 150 via SR1/SR6)."""
+    if arm not in ARMS:
+        raise ProtocolDeviationError(f"unknown arm {arm!r}; protocol arms are A and B")
+    if epochs == PROTOCOL_EPOCHS:
+        return ARMS[arm]
+    if epochs == REDUCED_EPOCHS:
+        return ARMS_REDUCED[arm]
+    raise ProtocolDeviationError(f"{epochs} epochs: the protocol allows {ALLOWED_EPOCHS} only")
 
 
 @dataclass(frozen=True)
@@ -111,7 +135,9 @@ def plan_and_preprocess_command(dataset_id: int) -> list[str]:
     ]
 
 
-def train_command(dataset_id: int, run: RunSpec, *, resume: bool = False) -> list[str]:
+def train_command(
+    dataset_id: int, run: RunSpec, *, resume: bool = False, trainer: str | None = None
+) -> list[str]:
     """Training command. The seed is passed through the environment (see trainers).
 
     ``resume`` appends nnU-Net's ``--c`` (continue from the run's latest checkpoint);
@@ -123,7 +149,7 @@ def train_command(dataset_id: int, run: RunSpec, *, resume: bool = False) -> lis
         PROTOCOL_CONFIGURATION,
         str(FIXED_FOLD),
         "-tr",
-        run.trainer,
+        trainer or run.trainer,
     ]
     return [*cmd, "--c"] if resume else cmd
 

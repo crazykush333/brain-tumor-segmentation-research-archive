@@ -105,10 +105,27 @@ export interface Experiment {
   notes: string;
 }
 
+export interface Estimate {
+  estimate: number;
+  ci_low: number;
+  ci_high: number;
+  p_value_two_sided_approx?: number;
+  holm_p?: number;
+}
+
+export interface ResultArtifact {
+  path: string;
+  kind: string;
+  name: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload: Record<string, any>;
+  provenance: { git_commit: string; protocol_sha256: string; generated_at: string };
+}
+
 export interface Results {
   available: boolean;
   statement: string;
-  artifacts: unknown[];
+  artifacts: ResultArtifact[];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

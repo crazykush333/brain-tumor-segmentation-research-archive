@@ -37,6 +37,7 @@ ACTION_REQUIREMENTS: dict[str, list[str]] = {
     "pairwise_screen": _b(6),
     "freeze_patient_groups": _b(8),
     "create_split": _b(9),
+    "hoi_grouping": _b(9),  # C4: same frozen §6.2 screen/review within the HOI set
     "run_exp001": ["B1", "B2", "D1", "D2"],
     "train_main": [*_b(12), *_D_ALL],
     "infer_validation": [*_b(12), *_D_ALL],
@@ -70,12 +71,19 @@ TAGGED_ACTIONS = frozenset(
 )
 
 
-def check_action(action: str, repo_root: str | Path | None = None) -> list[str]:
-    """Return the list of unmet requirements (empty if the action is permitted)."""
+def check_action(
+    action: str, repo_root: str | Path | None = None, *, status_root: str | Path | None = None
+) -> list[str]:
+    """Return the list of unmet requirements (empty if the action is permitted).
+
+    ``status_root``: read the gate records from this checkout (the live main checkout)
+    while the code checks (eval-v1 tag, clean tree) apply to ``repo_root`` (the tagged
+    worktree that runs the evaluation). Defaults to ``repo_root``.
+    """
     if action not in ACTION_REQUIREMENTS:
         raise ResearchGateError(f"unknown guarded action {action!r}")
     root = Path(repo_root) if repo_root is not None else find_repo_root()
-    status = load_status(root)
+    status = load_status(Path(status_root) if status_root is not None else root)
     unmet = [
         f"{g} ({status.gate(g).status})"
         for g in ACTION_REQUIREMENTS[action]
@@ -99,9 +107,11 @@ def check_action(action: str, repo_root: str | Path | None = None) -> list[str]:
     return unmet
 
 
-def require_action(action: str, repo_root: str | Path | None = None) -> None:
+def require_action(
+    action: str, repo_root: str | Path | None = None, *, status_root: str | Path | None = None
+) -> None:
     """Raise ResearchGateError unless every protocol gate for ``action`` is closed."""
-    unmet = check_action(action, repo_root)
+    unmet = check_action(action, repo_root, status_root=status_root)
     if unmet:
         prefix = f"{ACQUISITION_LOCKED_MESSAGE} " if action == "acquire_data" else ""
         raise ResearchGateError(

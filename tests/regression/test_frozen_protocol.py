@@ -116,10 +116,23 @@ def test_readme_status_line_matches_status_file(repo_root: Path) -> None:
 
 
 def test_no_numeric_results_in_results_tree(repo_root: Path) -> None:
+    """Until results.available, results/ holds only READMEs and the master-run state summary
+    (gate/step states and hashes; it must itself declare that no results exist)."""
+    import json
+
+    status = yaml.safe_load((repo_root / "docs/project_status.yaml").read_text(encoding="utf-8"))
+    if status["results"]["available"]:
+        return  # results exist: they are checked through results/index.json (site export)
     files = [p for p in (repo_root / "results").rglob("*") if p.is_file()]
-    assert all(p.name == "README.md" for p in files), files
-    for p in files:
+    readmes = [p for p in files if p.name == "README.md"]
+    others = [p for p in files if p.name != "README.md"]
+    rel = [p.relative_to(repo_root).as_posix() for p in others]
+    assert rel in ([], ["results/run_summary.json"]), rel
+    for p in readmes:
         assert "No scientific results are available" in p.read_text(encoding="utf-8")
+    for p in others:
+        summary = json.loads(p.read_text(encoding="utf-8"))
+        assert summary["results_available"] is False and summary["results"] is None
 
 
 def test_protocol_mirror_integrity_check_fails_on_tamper(tmp_path: Path, repo_root: Path) -> None:

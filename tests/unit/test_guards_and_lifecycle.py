@@ -52,7 +52,13 @@ def test_current_status_matches_reported_state(repo_root: Path) -> None:
     assert st.gate("B2").status == "AUTHORIZED"  # ready, not executed
     for gid in (f"C{i}" for i in range(1, 7)):
         assert st.gate(gid).status == "NOT_STARTED", gid
-    for gid in (f"D{i}" for i in range(1, 7)):
+    # D1 (owner authorization of EXP-001, 2026-10-04) and D2 (B1 route) closed by the master run
+    for gid in ("D1", "D2"):
+        assert st.gate(gid).status == "CLOSED" and st.gate(gid).closed_on == "2026-10-04", gid
+    assert st.gate("D1").evidence == (
+        "docs/research/execution/D1_EXP-001_OWNER_AUTHORIZATION_2026-10-04.md"
+    )
+    for gid in (f"D{i}" for i in range(3, 7)):
         assert st.gate(gid).status == "NOT_STARTED", gid
     for gid in (f"B{i}" for i in range(3, 13)):
         assert st.gate(gid).status == "LOCKED", gid

@@ -9,6 +9,7 @@ repository status is only ever read, never changed.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import inspect
 import json
@@ -720,10 +721,15 @@ def test_invalid_transitions_rejected(repo_root: Path) -> None:
     for gid, new in (("B1", "PENDING"), ("B1", "PASSED"), ("B2", "PASSED"), ("B3", "AUTHORIZED")):
         with pytest.raises(ConfigError):
             apply_transition(real, gid, new, evidence="x", on="2000-01-01")
+    # a B1-passed baseline with the D gates not started (independent of the live D states)
+    base = copy.deepcopy(real)
+    for g in base["gates"]:
+        if g["id"].startswith("D"):
+            g.update(status="NOT_STARTED", evidence=None, closed_on=None)
     with pytest.raises(ConfigError, match="evidence and a date"):
-        apply_transition(real, "D1", "CLOSED")
+        apply_transition(base, "D1", "CLOSED")
     # B1 has PASSED: D1 may close with evidence; D6 still needs D1-D5
-    closed = apply_transition(real, "D1", "CLOSED", evidence="x", on="2000-01-01")
+    closed = apply_transition(base, "D1", "CLOSED", evidence="x", on="2000-01-01")
     d1 = next(g for g in closed["gates"] if g["id"] == "D1")
     assert (d1["status"], d1["evidence"], d1["closed_on"]) == ("CLOSED", "x", "2000-01-01")
     with pytest.raises(ConfigError, match="not closed"):

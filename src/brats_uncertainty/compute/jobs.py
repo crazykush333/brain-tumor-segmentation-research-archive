@@ -40,10 +40,12 @@ from brats_uncertainty.compute.probe import COMPUTE_CONFIG
 from brats_uncertainty.errors import ProvenanceError
 from brats_uncertainty.evaluation.guards import require_action
 from brats_uncertainty.models.nnunet import (
+    PROTOCOL_EPOCHS,
     RunSpec,
     run_namespace,
     train_command,
     train_environment,
+    trainer_for,
 )
 from brats_uncertainty.utils.git import git_commit, git_is_dirty
 from brats_uncertainty.utils.hashing import sha256_file, sha256_json
@@ -226,6 +228,7 @@ def run_identity(
     split_sha256: str,
     dataset_provenance: Path,
     synthetic: bool,
+    epochs: int = PROTOCOL_EPOCHS,
 ) -> dict[str, Any]:
     for name, h in (("manifest_sha256", manifest_sha256), ("split_sha256", split_sha256)):
         if not _HEX64.match(h):
@@ -242,7 +245,7 @@ def run_identity(
         "experiment_id": job.experiment_id,
         "arm": run.arm,
         "seed": run.seed,
-        "trainer": run.trainer,
+        "trainer": trainer_for(run.arm, epochs),
         "protocol_version": protocol.version,
         "protocol_sha256": str(protocol.raw["protocol"]["sha256"]),
         "config_sha256": {
@@ -301,6 +304,7 @@ def run_training_job(
     resume: bool = False,
     restart_without_checkpoint: bool = False,
     synthetic_test_mode: bool = False,
+    epochs: int = PROTOCOL_EPOCHS,
     runner: Callable[[Sequence[str], dict[str, str]], int] | None = None,
 ) -> dict[str, Any]:
     """Plan, start or (explicitly) resume one protocol training run; fully recorded."""
@@ -320,6 +324,7 @@ def run_training_job(
         split_sha256=split_sha256,
         dataset_provenance=dataset_provenance,
         synthetic=synthetic_test_mode,
+        epochs=epochs,
     )
     run = job.run
     run_dir = run_namespace(results_root, job.experiment_id, run)
@@ -345,7 +350,9 @@ def run_training_job(
         "environment_hash": environment_hash(facts),
         "hardware": facts,
     }
-    cmd = train_command(dataset_id, run, resume=decision.action == "resume")
+    cmd = train_command(
+        dataset_id, run, resume=decision.action == "resume", trainer=identity["trainer"]
+    )
     env = train_environment(run, run_dir)
     attempt["command"] = cmd
     manifest["attempts"].append(attempt)

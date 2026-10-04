@@ -52,12 +52,12 @@ from brats_uncertainty.orchestration.steps import (
     StepBlocked,
     build_steps,
     execute_d1,
-    execute_d6,
     gate_step_executor,
     load_master_config,
     produce_b2,
     produce_b8,
 )
+from brats_uncertainty.orchestration.study_steps import execute_d6
 from tests.conftest import REPO_ROOT
 
 PROTOCOL_TEXT = (REPO_ROOT / "docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md").read_text("utf-8")
