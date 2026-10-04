@@ -111,7 +111,7 @@ gates:
   - {id: C5, title: "Validation-derived tau_q and I frozen", status: NOT_STARTED, evidence: null, closed_on: null}
   - {id: C6, title: "Evaluation code tagged eval-v1", status: NOT_STARTED, evidence: null, closed_on: null}
   # --- D: EXP-001 / compute gates -----------------------------------------------
-  - {id: D1, title: "Owner authorization of EXP-001", status: NOT_STARTED, evidence: null, closed_on: null}
+  - {id: D1, title: "Owner authorization of EXP-001", status: CLOSED, evidence: "docs/research/execution/D1_EXP-001_OWNER_AUTHORIZATION_2026-10-04.md", closed_on: "2026-10-04"}
   - {id: D2, title: "Approved data route (B1)", status: NOT_STARTED, evidence: null, closed_on: null}
   - {id: D3, title: "Pilot restricted to site != 1 development cases", status: NOT_STARTED, evidence: null, closed_on: null}
   - {id: D4, title: "Pilot computes no label-based scientific metrics", status: NOT_STARTED, evidence: null, closed_on: null}

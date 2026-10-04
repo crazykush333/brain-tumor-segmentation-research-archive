@@ -214,10 +214,10 @@
       "title": "Evaluation code tagged eval-v1"
     },
     {
-      "closed_on": null,
+      "closed_on": "2026-10-04",
       "group": "D",
       "id": "D1",
-      "status": "NOT_STARTED",
+      "status": "CLOSED",
       "title": "Owner authorization of EXP-001"
     },
     {
