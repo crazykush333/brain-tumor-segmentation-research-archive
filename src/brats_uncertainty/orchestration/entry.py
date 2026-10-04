@@ -73,7 +73,7 @@ def master_run(
     steps = build_steps()
     state = load_state(state_path)
     if plan_only:
-        return RunReport(statuses=plan(ctx, steps, state)), ctx
+        return RunReport(statuses=plan(ctx, steps, state), planned=True), ctx
     if state.sessions and not resume:
         raise ConfigError(
             f"a master state exists at {state_path / STATE_FILENAME}; pass --resume to continue "

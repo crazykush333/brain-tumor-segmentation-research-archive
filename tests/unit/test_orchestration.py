@@ -558,7 +558,8 @@ def test_cli_master_run_plan_and_safety(tmp_path: Path, capsys: pytest.CaptureFi
         main(["--repo-root", str(REPO_ROOT), "master-run", "--plan", "--work-dir", str(work)]) == 0
     )
     out = capsys.readouterr().out
-    assert "B2" in out and "TRAIN-B2" in out
+    assert "B2" in out and "TRAIN-B2" in out and "nothing executed" in out
+    assert "every reachable step" not in out
     assert not work.exists()  # --plan creates nothing
     assert (
         main(

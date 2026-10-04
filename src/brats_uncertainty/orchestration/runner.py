@@ -46,8 +46,13 @@ class RunReport:
     passed_now: list[str] = field(default_factory=list)
     commits: list[str] = field(default_factory=list)
     state_path: Path | None = None
+    planned: bool = False
 
     def describe(self) -> str:
+        if self.planned:
+            lines = ["master-run plan (nothing executed):"]
+            lines += [f"  {sid:<16} {st}" for sid, st in self.statuses.items()]
+            return "\n".join(lines)
         lines = ["master-run step status:"]
         lines += [f"  {sid:<16} {st}" for sid, st in self.statuses.items()]
         if self.passed_now:
