@@ -84,7 +84,7 @@ Resume rules (`brats-uncertainty job-run … --resume`, which uses nnU-Net `--c`
 ## 4. Official data access (B2)
 
 Two supported paths, both ending in the existing gated `acquire --adapter local-import`, which keeps the official nested hierarchy:
-- **A. Runtime acquisition** in the remote session with the IBM Aspera CLI. Install it with the commands from IBM/aspera-cli's README (`gem install aspera-cli`, `ascli config transferd install`). The command that receives a public package link, and whether one folder can be selected, are **confirmed from the client's own help output in notebook 00**. No command is assumed.
+- **A. Runtime acquisition** in the remote session with the IBM Aspera CLI. Install it with the commands from IBM/aspera-cli's README (`gem install aspera-cli`, `ascli config transferd install`). The command that receives a public package link, and whether one folder can be selected, are **confirmed from the client's own help output in notebook 00**. No command is assumed. `transferd install` puts `ascp` in ascli's SDK folder (default `$HOME/.aspera/sdk`), not on PATH, so `compute-preflight` locates it with `ascli config ascp show` (IBM aspera-cli manual).
 - **B. Manual official delivery** on a private VM: the owner downloads with the official Aspera client and points `DELIVERY` at it. On Kaggle this path is impossible, because uploading data would create a dataset.
 
 Then run `verify-checksums` with the provider `.sums` file exactly as delivered, `acquire`, and the export of the B2 record. Ephemeral sessions re-download in every session and must pass `verify-inventory` against the committed B2 record before any use. See [B2_OFFICIAL_DOWNLOAD_RUNBOOK.md](../data/B2_OFFICIAL_DOWNLOAD_RUNBOOK.md).

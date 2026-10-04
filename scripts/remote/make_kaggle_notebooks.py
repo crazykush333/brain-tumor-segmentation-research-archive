@@ -114,6 +114,9 @@ NOTEBOOKS: dict[str, dict[str, object]] = {
                 "!gem install aspera-cli --no-document\n"
                 "!ascli config transferd install\n"
                 "!ascli --version\n"
+                "# ascp is installed in ascli's SDK folder, not on PATH (IBM aspera-cli manual)\n"
+                "!ascli config ascp show\n"
+                "!ascli config ascp info\n"
                 "!ascli faspex5 -h 2>&1 | head -200",
             ),
             (

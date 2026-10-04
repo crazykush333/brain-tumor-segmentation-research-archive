@@ -24,6 +24,11 @@ requirements:
   transfer_client:            # official TCIA route for the challenge package (IBM Aspera)
     executables: ["ascli", "ascp"]
     install: ["gem install aspera-cli", "ascli config transferd install"]  # IBM aspera-cli README
+    # IBM aspera-cli manual: `transferd install` extracts ascp into $HOME/.aspera/sdk (option
+    # sdk_folder), which is not on PATH; ascli finds ascp itself and `ascli config ascp show`
+    # displays the path it uses. An executable not on PATH is located with this command.
+    locate:
+      ascp: ["ascli", "config", "ascp", "show"]
 
 storage:                      # GiB; the training-set size is MEASURED at B2 (Aspera selection), never assumed
   raw_training_set_gib: null

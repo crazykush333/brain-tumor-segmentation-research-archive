@@ -144,6 +144,35 @@ def _head(url: str, timeout: float) -> str:
         return f"UNREACHABLE ({exc})"
 
 
+def locate_transfer_client(
+    tc: Mapping[str, Any],
+    *,
+    which: Callable[[str], str | None] = shutil.which,
+    run: Callable[..., Any] = subprocess.run,
+) -> dict[str, str | None]:
+    """Path of each transfer-client executable, or None.
+
+    PATH first. The IBM Aspera CLI installs ``ascp`` into its own SDK folder, not on
+    PATH, so an executable with a ``locate`` command is then asked of the client
+    itself; the answer counts only if it is an existing file.
+    """
+    out: dict[str, str | None] = {}
+    for exe in tc["executables"]:
+        path = which(exe)
+        cmd = tc.get("locate", {}).get(exe)
+        tool = which(cmd[0]) if path is None and cmd else None
+        if tool:
+            try:
+                res = run([tool, *cmd[1:]], capture_output=True, text=True, timeout=60, check=True)
+                lines = [s.strip() for s in str(res.stdout).splitlines() if s.strip()]
+                if lines and Path(lines[-1]).is_file():
+                    path = lines[-1]
+            except (OSError, subprocess.SubprocessError):
+                pass
+        out[exe] = path
+    return out
+
+
 def collect_facts(
     repo_root: Path,
     work_dir: Path,
@@ -164,6 +193,7 @@ def collect_facts(
     except Exception as exc:  # report, do not crash the probe
         protocol.update(verified=False, error=str(exc))
     urls = cfg["requirements"]["internet"]["probe_urls"]
+    client = locate_transfer_client(cfg["requirements"]["transfer_client"])
     return {
         "environment": detect_environment(),
         "python": platform.python_version(),
@@ -176,10 +206,8 @@ def collect_facts(
         "disk_total_bytes": disk.total,
         "gpu": _gpu_facts(),
         "packages": {d: _version(d) for d in ("torch", "nnunetv2", "nibabel", "openpyxl")},
-        "transfer_client": {
-            exe: shutil.which(exe) is not None
-            for exe in cfg["requirements"]["transfer_client"]["executables"]
-        },
+        "transfer_client": {exe: p is not None for exe, p in client.items()},
+        "transfer_client_paths": client,
         "internet": None if offline else {u: head(u, 15.0) for u in urls},
         "git": {"commit": git_commit(repo_root), "dirty": git_is_dirty(repo_root)},
         "protocol": protocol,
@@ -209,7 +237,7 @@ class ComputeReport:
             f"CUDA {gpu['cuda_version'] or '-'} (via {gpu['source'] or '-'})",
             f"disk free at {f['work_dir']}: {_gib(f['disk_free_bytes'])}",
             f"packages: {f['packages']}",
-            f"transfer client: {f['transfer_client']}",
+            f"transfer client: {f.get('transfer_client_paths', f['transfer_client'])}",
             f"internet: {'not checked (--offline)' if f['internet'] is None else f['internet']}",
             f"git: {f['git']}   protocol: {f['protocol']}",
             *(f"BLOCKER: {b}" for b in self.blockers),

@@ -26,6 +26,7 @@ from brats_uncertainty.compute.probe import (
     classify,
     collect_facts,
     detect_environment,
+    locate_transfer_client,
 )
 from brats_uncertainty.data.records import InventoryEntry, inventory, verify_inventory
 from brats_uncertainty.errors import ProvenanceError, ResearchGateError
@@ -114,6 +115,38 @@ def test_b2_job_needs_no_gpu_but_needs_the_transfer_client() -> None:
     assert classify(_facts(**no_gpu, packages={}), CFG, "JOB-01").status == "READY"
     r = classify(_facts(**no_gpu), CFG, "JOB-02")
     assert r.status == "NOT_READY"
+
+
+def test_transfer_client_ascp_located_by_ascli_when_not_on_path(tmp_path: Path) -> None:
+    # SYNTHETIC: ascp lives in ascli's SDK folder (not on PATH), as `transferd install` leaves it
+    ascp = tmp_path / "sdk" / "ascp"
+    ascp.parent.mkdir()
+    ascp.write_text("synthetic", encoding="utf-8")
+    tc = CFG["requirements"]["transfer_client"]
+    on_path = {"ascli": "/synthetic/bin/ascli"}
+    calls: list[list[str]] = []
+
+    class _Res:
+        def __init__(self, stdout: str) -> None:
+            self.stdout = stdout
+
+    def run_ok(cmd: list[str], **_: Any) -> _Res:
+        calls.append(cmd)
+        return _Res(f"{ascp}\n")
+
+    found = locate_transfer_client(tc, which=on_path.get, run=run_ok)
+    assert found == {"ascli": "/synthetic/bin/ascli", "ascp": str(ascp)}
+    assert calls == [["/synthetic/bin/ascli", "config", "ascp", "show"]]
+    # a reported path that is not an existing file does not count
+    gone = locate_transfer_client(tc, which=on_path.get, run=lambda c, **_: _Res("/nope/ascp"))
+    assert gone["ascp"] is None
+    # without ascli nothing is asked and ascp stays missing
+    assert locate_transfer_client(tc, which=lambda _: None, run=run_ok)["ascp"] is None
+    assert len(calls) == 1
+    # ascp already on PATH: the locator is not run
+    both = {"ascli": "/b/ascli", "ascp": "/b/ascp"}
+    assert locate_transfer_client(tc, which=both.get, run=run_ok)["ascp"] == "/b/ascp"
+    assert len(calls) == 1
 
 
 def test_soft_limits_and_offline() -> None:
