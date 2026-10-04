@@ -1,6 +1,6 @@
 # GitHub setup and the remote-execution loop
 
-**Status (2026-10-01): this repository has no git remote, and the GitHub CLI (`gh`) is not installed on the owner's machine.** Nothing has been pushed. Creating the remote and pushing are owner actions: publishing code is outward-facing, and no credentials are used or stored here.
+**Status (public release):** the public repository is `https://github.com/crazykush333/brain-tumor-segmentation-research` (default branch `main`). The development history is archived separately ([docs/research/ARCHIVAL_PROVENANCE.md](../research/ARCHIVAL_PROVENANCE.md)); the `protocol-v1.0` tag lives in that archive. No credentials are used or stored here.
 
 ## 1. One-time: create the remote (owner)
 
@@ -12,14 +12,10 @@
    ```
 
    ```bash
-   git push -u origin main infra/reproducibility-infrastructure
+   git push -u origin main
    ```
 
-   ```bash
-   git push origin protocol-v1.0
-   ```
-
-   The tag push publishes the frozen protocol tag unchanged; never use `--force`.
+   Never use `--force`. The frozen protocol is verified by its SHA-256 (`brats-uncertainty verify-protocol`); its tag `protocol-v1.0` is kept in the archival repository.
 3. For a **private** repository, a remote session needs read access. Use a fine-grained, read-only token stored as a platform secret, such as a Kaggle Secret. Never put a token in a notebook cell, a config file or a URL that is printed.
 
 ## 2. The loop for every remote job

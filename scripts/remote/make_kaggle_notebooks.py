@@ -394,7 +394,7 @@ NOTEBOOKS: dict[str, dict[str, object]] = {
                 "code",
                 "# PARAMETERS - set before running (no secrets here)\n"
                 'REPO_URL = ""   # https URL of this research repository (GitHub)\n'
-                'BRANCH = "infra/reproducibility-infrastructure"  # the runner pushes here\n'
+                'BRANCH = "main"  # the runner pushes milestones here\n'
                 'WORK = "/tmp/brats"                          # ephemeral raw-data storage\n'
                 'STATE = "/kaggle/working/master_state"       # runner journal (output)\n'
                 'assert REPO_URL, "set REPO_URL"',

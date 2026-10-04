@@ -57,7 +57,7 @@ training:
 git:
   identity: {name: "Ayush Kushwaha", email: "ayushkushwaha21029@gmail.com"}
   remote: origin
-  branch: infra/reproducibility-infrastructure
+  branch: main                        # default branch of the public repository
   token_env: GITHUB_TOKEN             # only if the environment has no credential helper
   # Only these paths are ever staged by the runner (never data, checkpoints, predictions,
   # licensed metadata or credentials; the repository scan runs before every commit).
