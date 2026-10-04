@@ -459,7 +459,12 @@ def test_notebooks_are_generated_and_safe() -> None:
         "04_training_job.ipynb",
         "05_evaluation_job.ipynb",
         "06_results_export.ipynb",
+        "99_master_pipeline.ipynb",
     ]
+    master = json.loads((kdir / "99_master_pipeline.ipynb").read_text(encoding="utf-8"))
+    master_code = "\n".join(c["source"] for c in master["cells"] if c["cell_type"] == "code")
+    assert "scripts/remote/master_run.py --resume --commit" in master_code
+    assert "print(os.environ" not in master_code and "--force" not in master_code
     probe_nb = json.loads((kdir / "00_environment_probe.ipynb").read_text(encoding="utf-8"))
     code = "\n".join(c["source"] for c in probe_nb["cells"] if c["cell_type"] == "code")
     for downloading in ("acquire", "urlretrieve", "RECEIVE_CMD", "--execute", "packages receive"):
@@ -510,6 +515,11 @@ def test_every_notebook_has_explicit_gate_or_stop_behaviour() -> None:
     for name in sorted(p.name for p in kdir.glob("*.ipynb")):
         cells = code(name)
         assert 'assert REPO_URL, "set REPO_URL"' in cells[0], name  # stops without a target
+        if name == "99_master_pipeline.ipynb":
+            # the runner commits milestones, so it works on the branch; every record it
+            # writes is stamped with the exact commit (printed right after checkout)
+            assert "BRANCH = " in cells[0] and "git rev-parse HEAD" in cells[1]
+            continue
         assert 'assert COMMIT, "set COMMIT"' in cells[0], name
     assert "STOP: this notebook only probes" in code("00_environment_probe.ipynb")[-1]
     export = code("06_results_export.ipynb")

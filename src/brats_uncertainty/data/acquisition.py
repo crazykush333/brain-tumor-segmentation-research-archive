@@ -191,6 +191,41 @@ def _https_open(url: str) -> IO[bytes]:  # pragma: no cover - real network, neve
     return urllib.request.urlopen(url, timeout=120)
 
 
+def fetch_official_file(
+    url: str,
+    dest: Path,
+    *,
+    official_prefixes: tuple[str, ...],
+    opener: Opener = _https_open,
+) -> Path:
+    """Byte-for-byte download of one official public file into the B2 delivery folder.
+
+    Used for the two B3/B4 metadata files (B2 runbook §1), which travel with the
+    official delivery into the gated B2 import. Only HTTPS URLs under an official
+    source prefix (dataset ``evidence_identity``) are accepted, never credentials;
+    an existing file is never overwritten and the bytes are not altered.
+    """
+    parts = urlsplit(url)
+    if parts.scheme != "https" or parts.username or parts.password:
+        raise ProvenanceError("only plain https URLs (no credentials) are allowed")
+    if not any(url.startswith(p) for p in official_prefixes):
+        raise ProvenanceError(f"{redact_url(url)} is not under an official source prefix")
+    if dest.exists():
+        raise FileExistsError(f"refusing to overwrite {dest.name}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    log_event(_LOG, "download", url=redact_url(url), dest=dest.name)
+    tmp = dest.with_name(dest.name + ".part")
+    try:
+        with opener(url) as resp, tmp.open("wb") as fh:
+            while chunk := resp.read(_CHUNK):
+                fh.write(chunk)
+        tmp.replace(dest)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    return dest
+
+
 class HttpsFileAdapter(AcquisitionAdapter):
     """Download individual public HTTPS files from an official source page.
 

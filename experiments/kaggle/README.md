@@ -11,6 +11,7 @@ These notebooks run the repository's gated CLI at an exact commit inside a **pri
 | `04_training_job` | JOB-02..07: one resumable run | `train_main` | no, needs B12 and D1–D6 |
 | `05_evaluation_job` | JOB-08 | `evaluate_internal_test` | no, needs the C gates and `eval-v1` |
 | `06_results_export` | public-safe artifacts only | none | after results exist |
+| `99_master_pipeline` | launcher of `scripts/remote/master_run.py`: the runner decides every next step | each step's own gates | yes (it stops at the first genuine blocker) |
 
 Rules:
 

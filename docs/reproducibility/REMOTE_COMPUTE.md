@@ -120,3 +120,34 @@ Missing or extra cases fail, and nothing is skipped. The output is atomic and de
 - Put credentials in cells, configs or logs.
 - Report an estimate as a measurement.
 - Start training before B12 and D1–D6.
+
+## 9. Master execution (one entry point)
+
+`python scripts/remote/master_run.py --resume --commit --push` (wrappers:
+`scripts/remote/run_all.sh`, `scripts/remote/run_all.ps1`; launcher notebook:
+`experiments/kaggle/99_master_pipeline.ipynb`) replaces running notebooks 00-06 by hand.
+The logic lives in `src/brats_uncertainty/orchestration/` and is unit-tested.
+
+- **Steps, in protocol order:** ENV (preflight, every session), D1, D2, B2-B12, EXP-001
+  pilot, D3-D6, the six training runs, validation (SR2), C1-C6, internal test, external
+  evaluations, statistics/figures, final audit. `--plan` lists them with their status.
+- **State:** step statuses LOCKED / READY / RUNNING / PASSED / FAILED / BLOCKED /
+  REVIEW_REQUIRED. Gates are re-derived from `docs/project_status.yaml` at every start;
+  training runs from their `run_manifest.json`; the journal `master_state.json` lives in
+  `$BRATS_STATE_DIR` (default `$BRATS_WORK/state`). A crashed step stays RUNNING and is
+  resumed; a FAILED step is never re-run without `--retry <STEP>`; a run without a
+  checkpoint restarts only with `--approve-restart JOB-0x`.
+- **Gates:** each B gate goes AUTHORIZED -> RUNNING -> (stage writes its record to
+  `docs/data/records/`) -> PASSED, each change committed; C/D gates close with committed
+  evidence (`evaluation.lifecycle.CD_TRANSITIONS`). The runner never reopens a FAILED or
+  BLOCKED gate.
+- **Stops:** only at a genuine blocker: no official delivery or verified receive command
+  (B2), the human B8 review, an insufficient compute environment, a failed protocol or
+  integrity assertion, missing credentials, or an executor that is not implemented yet.
+- **Git:** repository-local identity from `configs/compute/master_run.yaml`; only
+  allow-listed paths are staged; the repository scan runs before every commit; no
+  attribution trailers; pushes are fast-forward only. A token, if needed, comes from
+  `GITHUB_TOKEN` through a one-shot credential helper and is never stored.
+- **Not yet implemented executors** (the runner stops there with that message): the
+  EXP-001 measurement harness, validation inference + SR2, C1-C6, the internal-test and
+  external evaluations, statistics/figures.

@@ -375,6 +375,65 @@ NOTEBOOKS: dict[str, dict[str, object]] = {
             ),
         ],
     ),
+    "99_master_pipeline.ipynb": _nb(
+        "99 - Master pipeline launcher (the runner decides every next step)",
+        [
+            (
+                "markdown",
+                "Launches `scripts/remote/master_run.py`, the single entry point. The runner "
+                "(brats_uncertainty.orchestration, tested) re-derives every gate from "
+                "`docs/project_status.yaml`, runs each permitted step in protocol order, "
+                "resumes interrupted work, commits and pushes milestones (allow-listed, "
+                "public-safe paths only), and stops only at a genuine blocker with the exact "
+                "gate, blocker and action. **The preferred full-study environment is a private "
+                "persistent GPU VM** (`scripts/remote/run_all.sh`); Kaggle session storage is "
+                "ephemeral, so raw data are re-acquired per session and verified against the "
+                "committed B2 inventory.",
+            ),
+            (
+                "code",
+                "# PARAMETERS - set before running (no secrets here)\n"
+                'REPO_URL = ""   # https URL of this research repository (GitHub)\n'
+                'BRANCH = "infra/reproducibility-infrastructure"  # the runner pushes here\n'
+                'WORK = "/tmp/brats"                          # ephemeral raw-data storage\n'
+                'STATE = "/kaggle/working/master_state"       # runner journal (output)\n'
+                'assert REPO_URL, "set REPO_URL"',
+            ),
+            (
+                "code",
+                "import os\n\n"
+                "!git clone --quiet --branch {BRANCH} {REPO_URL} /kaggle/working/repo\n"
+                "%cd /kaggle/working/repo\n"
+                "!git rev-parse HEAD\n"
+                '!pip install --quiet -e ".[io,nnunet]"\n'
+                "!brats-uncertainty verify-protocol\n"
+                'os.environ["BRATS_WORK"] = WORK\n'
+                'os.environ["BRATS_STATE_DIR"] = STATE',
+            ),
+            (
+                "code",
+                "# Push credential from Kaggle Secrets (never printed, never written to disk)\n"
+                "try:\n"
+                "    from kaggle_secrets import UserSecretsClient\n\n"
+                '    os.environ["GITHUB_TOKEN"] = UserSecretsClient().get_secret("GITHUB_TOKEN")\n'
+                "except Exception:\n"
+                '    print("no GITHUB_TOKEN secret: milestones are committed but not pushed")',
+            ),
+            (
+                "code",
+                "# Official IBM Aspera CLI (needed only for a runtime receive at B2)\n"
+                "!apt-get -qq update && apt-get -qq install -y ruby-full > /dev/null\n"
+                "!gem install aspera-cli --no-document\n"
+                "!ascli config transferd install\n"
+                "!ascli config ascp show",
+            ),
+            (
+                "code",
+                'PUSH = "--push" if os.environ.get("GITHUB_TOKEN") else ""\n'
+                "!python scripts/remote/master_run.py --resume --commit {PUSH}",
+            ),
+        ],
+    ),
 }
 
 

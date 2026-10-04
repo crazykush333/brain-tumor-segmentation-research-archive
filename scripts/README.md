@@ -21,6 +21,15 @@ corresponding protocol gates are closed** (with evidence) in
 | `splitting/create_split.py` | `create_split` | B1–B9 |
 | `experiments/train.py` | `train_main` | B1–B12, D1–D6 |
 | `evaluation/analyze_primary.py` | `evaluate_internal_test` | B1–B12, D1–D6, C5, C6 + `eval-v1` checkout |
+| `remote/master_run.py` (`run_all.sh`, `run_all.ps1`) | every step's own action, in order | each step's gates; stops at the first unmet one |
+
+**Master entry point.** `python scripts/remote/master_run.py --resume --commit --push`
+(= `brats-uncertainty master-run`) runs the whole frozen protocol: it re-derives every
+gate from `docs/project_status.yaml`, executes each permitted step in order through the
+gated stages above, resumes interrupted work, commits/pushes allow-listed public-safe
+milestones, and stops only at a genuine blocker with the exact gate, blocker and action.
+`--plan` shows the step statuses without executing anything. See
+[docs/reproducibility/REMOTE_COMPUTE.md](../docs/reproducibility/REMOTE_COMPUTE.md) §9.
 
 Run from the repository root, for example `python scripts/checks/check_repository.py`.
 Data locations are passed as arguments or environment variables and never hard-coded.

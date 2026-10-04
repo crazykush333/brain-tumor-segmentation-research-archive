@@ -391,6 +391,28 @@ def _cmd_gate_transition(root: Path, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_master_run(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.orchestration.entry import master_run
+
+    report, _ = master_run(
+        root,
+        work_dir=args.work_dir,
+        state_dir=args.state_dir,
+        resume=args.resume,
+        commit=args.commit,
+        push=args.push,
+        offline=args.offline,
+        retry=args.retry or [],
+        approve_restart=args.approve_restart or [],
+        until=args.until,
+        plan_only=args.plan,
+    )
+    print(report.describe())
+    if args.plan:
+        return 0
+    return 2 if report.stops else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="brats-uncertainty", description=__doc__)
     p.add_argument(
@@ -582,6 +604,26 @@ def build_parser() -> argparse.ArgumentParser:
     gt.add_argument("--approved-route", default=None, help="B1 only: the approved data route")
     gt.add_argument("--apply", action="store_true")
     gt.set_defaults(func=_cmd_gate_transition)
+    mr = sub.add_parser(
+        "master-run",
+        help="run the whole frozen protocol: every permitted gate/run, resumable; stops only "
+        "at genuine blockers",
+    )
+    mr.add_argument("--work-dir", default=None, help="persistent private storage ($BRATS_WORK)")
+    mr.add_argument("--state-dir", default=None, help="master state journal (default WORK/state)")
+    mr.add_argument("--resume", action="store_true", help="continue from the existing state")
+    mr.add_argument("--commit", action="store_true", help="commit milestones (allow-listed paths)")
+    mr.add_argument("--push", action="store_true", help="push milestone commits (never forced)")
+    mr.add_argument("--offline", action="store_true", help="no network access")
+    mr.add_argument("--retry", action="append", help="owner: retry a FAILED step (repeatable)")
+    mr.add_argument(
+        "--approve-restart",
+        action="append",
+        help="owner: allow JOB-0x without a checkpoint to restart from scratch (recorded)",
+    )
+    mr.add_argument("--until", default=None, help="stop after this step id")
+    mr.add_argument("--plan", action="store_true", help="show step statuses; execute nothing")
+    mr.set_defaults(func=_cmd_master_run)
     return p
 
 

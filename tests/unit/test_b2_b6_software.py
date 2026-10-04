@@ -703,7 +703,12 @@ def test_invalid_transitions_rejected(repo_root: Path) -> None:
         ("B1", "AUTHORIZED", {}, "illegal transition"),
         ("B1", "PASSED", {"evidence": "x", "on": "2000-01-01"}, "approved data route"),
         ("B1", "PASSED", {"approved_route": "r"}, "evidence and a date"),
-        ("A1", "PASSED", {}, "B1-B12 only"),
+        ("A1", "PASSED", {}, "B1-B12, C1-C6 and D1-D6"),
+        ("D1", "CLOSED", {"evidence": "x", "on": "2000-01-01"}, r"\['B1'\] not closed"),
+        ("D3", "CLOSED", {"evidence": "x", "on": "2000-01-01"}, "not closed"),
+        ("D1", "PASSED", {}, "illegal transition"),
+        ("C1", "BLOCKED", {}, "evidence document"),
+        ("D1", "IN_PROGRESS", {"approved_route": "r"}, "approved_route"),
     ]:
         with pytest.raises(ConfigError, match=msg):
             apply_transition(raw, gid, new, **kw)
@@ -715,6 +720,14 @@ def test_invalid_transitions_rejected(repo_root: Path) -> None:
     for gid, new in (("B1", "PENDING"), ("B1", "PASSED"), ("B2", "PASSED"), ("B3", "AUTHORIZED")):
         with pytest.raises(ConfigError):
             apply_transition(real, gid, new, evidence="x", on="2000-01-01")
+    with pytest.raises(ConfigError, match="evidence and a date"):
+        apply_transition(real, "D1", "CLOSED")
+    # B1 has PASSED: D1 may close with evidence; D6 still needs D1-D5
+    closed = apply_transition(real, "D1", "CLOSED", evidence="x", on="2000-01-01")
+    d1 = next(g for g in closed["gates"] if g["id"] == "D1")
+    assert (d1["status"], d1["evidence"], d1["closed_on"]) == ("CLOSED", "x", "2000-01-01")
+    with pytest.raises(ConfigError, match="not closed"):
+        apply_transition(closed, "D6", "CLOSED", evidence="x", on="2000-01-01")
 
 
 def test_b1_pass_unlocks_only_b2_and_records_route(tmp_path: Path) -> None:
