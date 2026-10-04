@@ -1,29 +1,36 @@
 # data/ — private research data (NOT distributed through this repository)
 
-**No research data are present or redistributed here.** Everything under `data/`
-except this README is git-ignored. The BraTS 2021 and BraTS-Africa data must be
-obtained by each researcher from the official providers, through the data route
-approved at gate B1, under the providers' terms (see `docs/data/DATA_ACCESS.md`).
+**No research data are stored in Git.** Everything under `data/` except this README is
+git-ignored, and `brats-uncertainty check-repo` (run in CI) refuses imaging, labels,
+archives, arrays, licensed metadata, credentials and checkpoints anywhere in the
+repository.
 
-**Status (2026-09-30): B1 is PENDING; B2-B6 are LOCKED. No data may be placed here until gate B1 reaches PASSED.** Synthetic test data are never generated here (the generator refuses any path inside the repository).
+- **Raw BraTS data are not stored in Git.** The BraTS 2021 training data (and later
+  BraTS-Africa) are acquired separately by each researcher from the official provider
+  (TCIA), through the route approved at gate B1 (amendment v1.0-A1: direct official TCIA
+  access into a private, access-restricted computational environment), under the
+  providers' terms. See [`docs/data/DATA_ACCESS.md`](../docs/data/DATA_ACCESS.md).
+- **Patient imaging is never committed** — no NIfTI, DICOM, masks, predictions or
+  probability maps, and no images derived from them.
+- **Manifests contain only permitted identifiers, hashes and provenance** (case IDs,
+  file names, sizes, SHA-256, record fingerprints), committed as gate evidence in
+  `docs/data/records/` once the corresponding gate has run.
+- **Raw data remain in private execution storage** (`$BRATS_WORK` on the execution
+  machine, outside the repository); nnU-Net folders and checkpoints live there too.
 
-Local layout (create with `brats-uncertainty init-data-dirs`):
+Current status: B1 has PASSED (owner-approved alternative); B2 (official acquisition) is
+AUTHORIZED but **not executed — no data have been acquired**. Synthetic test data are
+never generated here (the generator refuses any path inside the repository).
+
+Optional local layout for a researcher's own machine (`brats-uncertainty init-data-dirs`):
 
 | Path | Contents | Tracked by git? |
 |---|---|---|
-| `data/raw/` | official files exactly as acquired (archives, NIfTI, crosswalk, metadata CSV) | **never** |
-| `data/manifests/` | B2–B6 records, manifests and integrity reports produced by the code | no (IDs/hashes/counts are published separately after owner review) |
+| `data/raw/` | official files exactly as acquired | **never** |
+| `data/manifests/` | working copies of records produced by the code | no (evidence is committed under `docs/data/records/`) |
 | `data/derived/` | anything computed from the images or labels | **never** |
-| `data/cache/` | temporary files (nnU-Net folders live outside the repo via env vars) | **never** |
+| `data/cache/` | temporary files | **never** |
 
-Rules:
-
-- Never commit images, labels, predictions, arrays, licensed metadata files,
-  archives, credentials (`kaggle.json`, `.env`, Synapse config) or checkpoints.
-  `.gitignore` and `brats-uncertainty check-repo` enforce this.
-- Never type a hash, count or ID list by hand; use the gated commands
-  (`acquire` [dry run by default], `hash-metadata`, `validate-data`, `build-manifest`,
-  `derive-counts`). They fail until their gates are closed.
-- Public derived artifacts (hashes, counts, ID-only lists) are committed only
-  after the owner reviews them, as administrative entries (see
-  `docs/research/protocol-amendments/README.md`).
+Rules: never type a hash, count or ID list by hand — the gated commands (`acquire`,
+`hash-metadata`, `build-manifest`, `derive-counts`, …) produce them and fail until their
+gates are open.

@@ -59,11 +59,11 @@ def test_africa_needs_an_approved_route() -> None:
 
 
 def test_africa_label_sequence_and_count_checks(tmp_path: Path) -> None:
-    ids = ["BraTS-SSA-00001-000", "BraTS-SSA-00002-000", "BraTS-SSA-00003-000"]
-    _africa_tree(tmp_path, ids, drop={"BraTS-SSA-00003-000": "-t2f"})
+    ids = ["BraTS-SSA-99991-000", "BraTS-SSA-99992-000", "BraTS-SSA-99993-000"]
+    _africa_tree(tmp_path, ids, drop={"BraTS-SSA-99993-000": "-t2f"})
     labels = {
-        "BraTS-SSA-00001-000": np.array([0, 1, 2, 3]),
-        "BraTS-SSA-00002-000": np.array([0, 2]),
+        "BraTS-SSA-99991-000": np.array([0, 1, 2, 3]),
+        "BraTS-SSA-99992-000": np.array([0, 2]),
     }
 
     def load_label(p: Path) -> np.ndarray:
@@ -71,21 +71,21 @@ def test_africa_label_sequence_and_count_checks(tmp_path: Path) -> None:
 
     res = verify_africa(
         tmp_path,
-        [*ids, "BraTS-SSA-00009-000"],
+        [*ids, "BraTS-SSA-99999-000"],
         AFRICA_CFG,
         load_label=load_label,
         image_shape=lambda p: (4, 4, 4),
     )
     assert res["C3_eligible"] == ids[:2] and res["C3_eligible_count"] == 2
-    assert res["C1_labels"]["BraTS-SSA-00002-000"]["subregions_present"] == {
+    assert res["C1_labels"]["BraTS-SSA-99992-000"]["subregions_present"] == {
         "NETC": False,
         "SNFH": True,
         "ET": False,
     }
-    assert res["C2_sequences"]["BraTS-SSA-00003-000"]["missing"] == ["FLAIR"]
-    assert res["C2_sequences"]["BraTS-SSA-00009-000"]["complete"] is False
+    assert res["C2_sequences"]["BraTS-SSA-99993-000"]["missing"] == ["FLAIR"]
+    assert res["C2_sequences"]["BraTS-SSA-99999-000"]["complete"] is False
     assert res["descriptive_only_SR3"]  # 2 < 30
-    labels["BraTS-SSA-00001-000"] = np.array([0, 4])  # BraTS 2021 ET value: unexpected here
+    labels["BraTS-SSA-99991-000"] = np.array([0, 4])  # BraTS 2021 ET value: unexpected here
     with pytest.raises(DataValidationError, match="unexpected label values"):
         verify_africa(
             tmp_path, ids, AFRICA_CFG, load_label=load_label, image_shape=lambda p: (4, 4, 4)

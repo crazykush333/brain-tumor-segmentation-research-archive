@@ -2,101 +2,135 @@
 
 > **Status: Protocol v1.0 frozen. Experimental execution pending.**
 
-A pre-registered empirical evaluation study. **No data have been acquired, no model has been trained, no split has been created, and no results exist.** This repository contains the frozen research protocol plus the software and reproducibility infrastructure that will carry it out once the protocol's gates are passed.
+A pre-registered, reproducible research pipeline for case-level uncertainty estimation under missing MRI sequences in brain tumour segmentation.
 
-[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-informational)](.github/workflows/ci.yml)
+**REAL EXPERIMENT STATUS: pending official data acquisition and suitable GPU execution.** No BraTS data have been acquired, no model has been trained, no split has been created and no scientific result exists.
+
+[![CI](https://github.com/crazykush333/brain-tumor-segmentation-research/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/crazykush333/brain-tumor-segmentation-research/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Protocol](https://img.shields.io/badge/protocol-v1.0%20frozen-blue)](docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md)
-[![Results](https://img.shields.io/badge/results-none%20yet-lightgrey)](results/README.md)
 
 ## Research question
 
-> When MRI sequences are missing at inference, does the case-level ensemble uncertainty of a modality-dropout nnU-Net discriminate unreliable enhancing-tumour segmentations *within* a given missing-sequence condition, i.e. beyond what the known identity of the missing sequence provides? How does this vary with which sequence is missing, and do the discrimination and operating thresholds transfer to a held-out institution and an external population?
+> Among cases with the same missing MRI sequence, can ensemble disagreement identify which enhancing-tumour segmentations are likely to fail — and does that signal, with its operating threshold, transfer to a held-out institution and an external population?
 
-**Primary hypothesis (H-W).** On the internal test set, for the modality-dropout (arm B) ensemble, the equal-weight mean over the four single-missing conditions C4 = {−T1, −T1c, −T2, −FLAIR} of the within-condition ET ΔAURC_c = AURC_c(U1) − AURC_c(I) is below 0. U1 is the ensemble pairwise-Dice confidence, I is the missingness-indicator baseline, and risk is 1 − ET Dice. H-W is supported if the patient-group bootstrap 95% CI lies entirely below 0.
+## Motivation
 
-The authoritative definition of everything above is the frozen protocol:
-**[docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md](docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md)**, git tag `protocol-v1.0`, SHA-256 `704c0b495917344f44b93e7548ade0e32a71220265419516a2c83d626fcd9811`.
+Clinical MRI protocols are often incomplete: a contrast-enhanced T1, T2 or FLAIR sequence may be missing or unusable. Segmentation networks can be trained to tolerate missing inputs, but deploying them safely also requires knowing *which individual cases* to trust. The identity of the missing sequence already tells us that some conditions are harder than others; this study asks whether model uncertainty adds information **within** a fixed missing-sequence condition, where knowing the condition alone cannot help, and whether the result holds outside the development population.
 
-## Current status
+## Frozen protocol
 
-| Stage | Status |
+The authoritative definition of the study is **[docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md](docs/research/FINAL_RESEARCH_PROTOCOL_v1.0.md)** — frozen 2026-09-28 (`protocol-v1.0`), SHA-256 `704c0b495917344f44b93e7548ade0e32a71220265419516a2c83d626fcd9811`, verified by `brats-uncertainty verify-protocol` and the regression tests. Changes are possible only through logged amendments; the one amendment so far (v1.0-A1) concerns the data route and changes no part of the scientific design.
+
+**Primary hypothesis (H-W).** On the internal test set, for the modality-dropout (arm B) ensemble, the equal-weight mean over the four single-missing conditions C4 = {−T1, −T1c, −T2, −FLAIR} of the within-condition ET ΔAURC_c = AURC_c(U1) − AURC_c(I) is below 0 (risk = 1 − ET Dice). H-W is supported if the patient-group bootstrap 95% CI lies entirely below 0.
+
+## Experimental design
+
+| Element | Design |
 |---|---|
-| Gate A (protocol freeze blockers A1–A9) | **Closed.** Frozen as v1.0 on 2026-09-28; A7 and A8 are owner-waived with mandatory pre-submission re-checks |
-| Research software and reproducibility infrastructure | Implemented and tested on synthetic inputs only |
-| Remote execution infrastructure | **Ready** (not yet run remotely). Private GPU VM or Kaggle/Colab session at an exact commit: environment probe, per-run namespaces, verified resume, nnU-Net dataset writer with provenance, result-record contract and export. See [REMOTE_COMPUTE.md](docs/reproducibility/REMOTE_COMPUTE.md) and [GITHUB_SETUP.md](docs/reproducibility/GITHUB_SETUP.md). **Scientific training has not been executed.** |
-| B1 — data-route authorization | **Authorized: owner-approved alternative** (2026-10-01; amendment [v1.0-A1](docs/research/protocol-amendments/2026-10-01_B1_data-route.md); external provider authorization: none). Route: direct official TCIA access into a private, access-restricted computational environment; no mirror, no redistribution, no raw data in GitHub or on the website. Records are in [docs/data/](docs/data/B1_DATA_ROUTE_AUTHORIZATION.md) |
-| B2–B6: data acquisition, metadata hashes, manifest, counts | **B2 ready (authorized, not executed); B3–B6 locked.** No data acquired. Software complete and tested on SYNTHETIC_TEST_DATA only; count targets 1,251 / 511 / 740 are protocol verification targets, not verified results |
-| B7–B12: same-patient screen, groups, final split | **Locked** pending B2–B6 |
-| D1–D6: EXP-001 compute pilot | Not started |
-| C1–C6: pre-external-evaluation gates | Not started |
-| Training, inference, evaluation, results | Not started. **No results exist.** |
+| Arms | A: standard nnU-Net training; B: modality-dropout training (primary) |
+| Conditions | C5 = {Full, −T1, −T1c, −T2, −FLAIR}; C4 (single-missing) is the primary estimand; Full is a control; C15 (all 15 subsets) secondary |
+| Missingness | the normalized channel of a missing sequence is set to 0 (training and inference) |
+| Uncertainty | U1 = mean pairwise Dice of the 3 ensemble members (primary); U2/U3 secondary/exploratory |
+| Baseline | I = missingness indicator (constant within a condition = random ranking) |
+| Endpoint | mean within-condition ET ΔAURC over C4; AURC with expected tie handling |
+| Statistics | patient-group bootstrap, 10,000 replicates (seed 12345); Holm within secondary families F1–F4; F5 descriptive |
+| Threshold transfer | τ_q fixed on validation C4 units, applied unchanged to internal test, UPenn and BraTS-Africa |
+| Stopping rules | SR1–SR8 (compute, sanity, data, integrity, bugs, budget, licensing, platform) |
 
-The machine-readable state is [docs/project_status.yaml](docs/project_status.yaml). The research-gate guards and the website both read that file.
+## Architecture
 
-## Repository layout
+- **Models:** nnU-Net v2, 3d_fullres, region-based (WT/TC/ET), 250 epochs (150 only if SR1/SR6 require), seeds 0, 1, 2 per arm; 3-member mean ensembles; sliding window step 0.5, mirroring off, threshold 0.5.
+- **Package** (`src/brats_uncertainty`): data gates and manifests (`data/`), patient grouping and split (`grouping/`, `splitting/`), metrics and uncertainty (`metrics/`, `uncertainty/`), statistics (`statistics/`), evaluation pipeline (`study/`), compute probe and resumable jobs (`compute/`), master orchestration (`orchestration/`), research-gate guards (`evaluation/`), provenance-stamped results and website export (`results/`).
 
-```
-configs/            protocol mirror (protocol_v1.0.yaml), dataset, experiment, evaluation, compute configs
-docs/research/      frozen protocol v1.0, audits, changelogs; archive/ holds superseded drafts
-docs/data/          data access, provenance and dictionary
-docs/reproducibility/ reproducibility, environment and compute documentation
-docs/project_status.yaml  single source of truth for project state
-experiments/        experiment metadata (EXP-001: PLANNED, not authorized)
-results/            placeholders only; no results exist
-splits/             empty until gate B10
-scripts/            thin entry points for gated pipeline stages and reporting
-src/brats_uncertainty/  the Python package
-tests/              unit, integration and regression tests (synthetic fixtures only)
-website/            Next.js research website (static export)
-```
+## Dataset roles
 
-## Package overview (`src/brats_uncertainty`)
-
-| Module | Purpose | Protocol |
+| Role | Dataset | n |
 |---|---|---|
-| `protocol.py` | loads `configs/protocol/protocol_v1.0.yaml`; fails if the frozen protocol's SHA-256 changes | freeze rule |
-| `preprocessing/` | 15 modality subsets, C4/C5, missingness (normalized channel = 0), label/region mapping | §8, §10 |
-| `models/` | arm-B dropout policy (p_full 0.5, 14 subsets); nnU-Net v2 adapter; guarded trainer template | §9, §10 |
-| `inference/` | 3-member mean ensemble, threshold 0.5; frozen inference settings | §9 |
-| `uncertainty/` | U1 (primary), U2 (descriptive), U3 (exploratory), I | §11 |
-| `metrics/` | Dice (empty conventions), risk–coverage, AURC with expected tie handling, e-AURC, ECE, Brier, volume failure; HD95 deferred to gate C6 | §3, §4, §12 |
-| `statistics/` | patient-group bootstrap (10,000, seed 12345), percentile and BCa CIs, bootstrap p-values, Holm within family, H-W statistic, τ_q rule, threshold transfer | §4 S7, §13–§15 |
-| `grouping/` | WT-label Dice screen, T_screen record (computed only from positive controls), review resolution, transitive grouping | §6.1–§6.2 |
-| `splitting/` | stratified patient-group 70/10/20 split, seed 20260927, §6.3 assertions, hashes | §6.3 |
-| `data/` | manifests with SHA-256 from bytes on disk, crosswalk parsing and cohort counts, provenance records | §5, §24 |
-| `evaluation/` | research-gate guards, `eval-v1` tag check, single-evaluation ledger (SR4), status schema | lifecycle, SR4 |
-| `experiments/`, `results/` | experiment lifecycle (PLANNED → … → COMPLETED/FAILED/INVALIDATED); provenance-stamped artifacts; website export | §24 |
-| `repo_checks.py` | prohibited-file and secret scan | data policy |
+| Development (train / validation / internal test, 70/10/20 by patient group) | BraTS 2021 training cases not from site 1 | 740 cases before grouping |
+| Held-out institution | UPenn-origin BraTS 2021 cases (site 1) | 511 |
+| External population | TCIA BraTS-Africa glioma cases | ≤ 95 (frozen at gate C3) |
 
-Every gated pipeline stage (manifest, T_screen, screen, grouping, split, training, evaluation) raises `ResearchGateError` until its gates are closed, with evidence, in `docs/project_status.yaml`.
-
-## Quick start (software only; no data needed)
-
-```bash
-python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-make check          # ruff, mypy, pytest, repository scan, website-data sync
-brats-uncertainty verify-protocol
-brats-uncertainty status
-brats-uncertainty check-action create_split          # reports the unmet gates
-```
-
-Website: see [website/README.md](website/README.md).
-
-## Data policy
-
-This repository never contains MRI scans, NIfTI files, patient-level labels, licensed metadata files (for example `BraTS2021_MappingToTCIA.xlsx`), credentials or model checkpoints. `.gitignore` and `brats-uncertainty check-repo` (run in CI) enforce this. Datasets must be obtained from the official providers under their terms and the route approved at gate B1: see [docs/data/DATA_ACCESS.md](docs/data/DATA_ACCESS.md), [docs/data/DATA_PROVENANCE.md](docs/data/DATA_PROVENANCE.md) and [data/README.md](data/README.md). The local `data/` tree is git-ignored except its README. Test fixtures are synthetic and are never described or used as BraTS data.
+Data are obtained only from the official providers through the approved route; see [Data policy](#data-policy).
 
 ## Reproducibility
 
-See [docs/reproducibility/REPRODUCIBILITY.md](docs/reproducibility/REPRODUCIBILITY.md), [ENVIRONMENT.md](docs/reproducibility/ENVIRONMENT.md) and [COMPUTE.md](docs/reproducibility/COMPUTE.md). Implementation choices that the protocol leaves open (for example the dilation structuring element) are listed there for owner confirmation before `eval-v1`.
+- **One master entry point:** `python scripts/remote/master_run.py --resume --commit --push` (wrappers `scripts/remote/run_all.sh` / `.ps1`) runs every permitted step in protocol order and stops only at a genuine blocker with the exact gate, blocker and action.
+- **Gates:** B1–B12 (data, grouping, split), D1–D6 (compute pilot), C1–C6 (pre-external evaluation); each needs committed evidence; failed gates are never reopened automatically.
+- **Resume:** crashed sessions resume from verified state; completed work is never re-run; failed steps need an explicit `--retry`.
+- **Provenance:** every record and artifact carries the git commit, protocol hash, config and input hashes.
+- **Safe export:** only public-safe file types; imaging, checkpoints, licensed metadata and demo files are refused.
+- **Evaluation integrity:** test and external sets are evaluated once, from the `eval-v1` tag, with an append-only ledger (SR4).
 
-## Citation, licence, conduct
+Details: [docs/reproducibility/](docs/reproducibility/REPRODUCIBILITY.md), [REMOTE_COMPUTE.md](docs/reproducibility/REMOTE_COMPUTE.md).
 
-- Cite via [CITATION.cff](CITATION.cff) (software; no paper exists yet).
-- Code licence: [Apache-2.0](LICENSE). *The licence choice is pending owner confirmation (docs/research/08 §2).* The licence covers code only; dataset licences are separate.
-- [CONTRIBUTING.md](CONTRIBUTING.md) · [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) · [SECURITY.md](SECURITY.md)
+## Repository structure
 
-## Historical design documents
+```
+.github/        CI (tests, lint, types, package build) and website build
+configs/        protocol mirror, datasets, compute, experiments, evaluation
+data/           README only — raw data are never stored in Git
+docs/           frozen protocol, amendments, data and gate records, status, reproducibility
+experiments/    experiment metadata; launcher notebooks (experiments/kaggle, experiments/vm)
+results/        real-result status (status.json) and the synthetic demonstration (demo/)
+scripts/        thin gated entry points, including the master runner
+splits/         README only until the real split is created (IDs and hashes only)
+src/            the brats_uncertainty package
+tests/          unit, integration and regression tests (synthetic fixtures only)
+website/        Next.js research website (static export)
+```
 
-Documents 01–11 in `docs/research/` record the research-design phase and are **superseded by the frozen protocol** wherever they differ; see [docs/research/README.md](docs/research/README.md).
+## Execution workflow
+
+```bash
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"                                # add ".[io,nnunet]" on the GPU machine
+brats-uncertainty verify-protocol
+brats-uncertainty master-run --plan --work-dir /data/brats_work    # show every step's status
+export BRATS_WORK=/data/brats_work BRATS_OFFICIAL_DELIVERY=/data/delivery
+bash scripts/remote/run_all.sh                         # run / resume the whole study
+```
+
+## Current research status
+
+| Item | Status |
+|---|---|
+| Research protocol | ✅ Frozen (v1.0) |
+| Execution engine and tests | ✅ Implemented, passing (synthetic fixtures) |
+| Data route (B1), EXP-001 authorization (D1, D2) | ✅ Approved / closed |
+| Official BraTS data (B2) | ⏳ Pending |
+| GPU execution, compute pilot (D3–D6) | ⏳ Pending |
+| Main training, validation | ⏳ Pending |
+| Internal and external evaluation | ⏳ Pending |
+| Scientific results | ⏳ Not available |
+
+Full table: [docs/research/STATUS.md](docs/research/STATUS.md). Machine-readable state: [docs/project_status.yaml](docs/project_status.yaml).
+
+## Data policy
+
+Raw BraTS data are **not** stored in Git. Official data are acquired separately through the route approved at gate B1 as an **owner-approved alternative** (direct official TCIA access into a private, access-restricted computational environment; amendment v1.0-A1; no external TCIA authorization is claimed) and remain in private execution storage. Gate B2 is authorized but not executed: no data have been acquired. Patient imaging, masks, predictions, checkpoints, licensed metadata and credentials are never committed; manifests contain only permitted IDs, hashes and provenance. `brats-uncertainty check-repo` enforces this in CI. See [data/README.md](data/README.md) and [docs/data/DATA_ACCESS.md](docs/data/DATA_ACCESS.md).
+
+## Results
+
+### Current status
+
+**Real BraTS scientific results: NOT YET AVAILABLE.** [`results/status.json`](results/status.json) reports `scientific_results_available: false`.
+
+### Demonstration
+
+A **synthetic** end-to-end demonstration shows how the result pipeline, statistics, figures and website will look once the real study is executed: [`results/demo/`](results/demo/). It is generated from deterministic synthetic toy volumes by the study's own code, every file is labelled `demo=true / synthetic=true / scientific_result=false`, and it is **not** a BraTS result and says nothing about the hypotheses.
+
+## Website
+
+The research website (`website/`, Next.js static export) presents the question, design, reproducibility system, live gate status and the results page (real-results status plus the clearly labelled synthetic demonstration). All content is generated from the repository's sources of truth (`brats-uncertainty export-site-data`).
+
+## Citation
+
+Cite the software via [CITATION.cff](CITATION.cff). No paper or scientific result exists yet. The development history of this project is preserved in an archival repository; see [docs/research/ARCHIVAL_PROVENANCE.md](docs/research/ARCHIVAL_PROVENANCE.md).
+
+## License
+
+Code: [Apache-2.0](LICENSE) (the licence choice is recorded as pending owner confirmation in docs/research/08 §2). Dataset licences are separate and are those of the providers (BraTS 2021 / TCIA: CC BY 4.0 and the TCIA Data Usage Policy; BraTS-Africa processed release: CC BY 4.0).
+
+[Contributing](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md)

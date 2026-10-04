@@ -7,6 +7,7 @@ title: "brats-uncertainty: reproducibility infrastructure for a pre-registered s
 version: 0.1.0
 date-released: "2026-09-29"
 license: Apache-2.0
+repository-code: "https://github.com/crazykush333/brain-tumor-segmentation-research"
 authors:
   - family-names: Kushwaha
     given-names: Ayush
