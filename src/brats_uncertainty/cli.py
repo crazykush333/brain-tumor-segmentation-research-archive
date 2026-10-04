@@ -413,6 +413,14 @@ def _cmd_master_run(root: Path, args: argparse.Namespace) -> int:
     return 2 if report.stops else 0
 
 
+def _cmd_demo(root: Path, args: argparse.Namespace) -> int:
+    from brats_uncertainty.demo import generate_demo
+
+    s = generate_demo(Path(args.out), repo_root=root, seed=args.seed)
+    print(f"synthetic demonstration written to {args.out} ({len(s['files'])} files): {s['label']}")
+    return 0
+
+
 def _cmd_evaluate_set(root: Path, args: argparse.Namespace) -> int:
     from brats_uncertainty.study.commands import evaluate_set_command
 
@@ -649,6 +657,12 @@ def build_parser() -> argparse.ArgumentParser:
     mr.add_argument("--until", default=None, help="stop after this step id")
     mr.add_argument("--plan", action="store_true", help="show step statuses; execute nothing")
     mr.set_defaults(func=_cmd_master_run)
+    dm = sub.add_parser(
+        "demo", help="synthetic pipeline demonstration (NOT results); only results/demo/"
+    )
+    dm.add_argument("--out", default="results/demo")
+    dm.add_argument("--seed", type=int, default=20261004)
+    dm.set_defaults(func=_cmd_demo)
     es = sub.add_parser(
         "evaluate-set", help="tagged: evaluate one test/external set once (eval-v1 worktree)"
     )

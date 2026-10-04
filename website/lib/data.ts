@@ -8,6 +8,7 @@ import statusJson from "../data/status.json";
 import protocolJson from "../data/protocol.json";
 import experimentsJson from "../data/experiments.json";
 import resultsJson from "../data/results.json";
+import demoJson from "../data/demo.json";
 
 export type GateStatus =
   | "CLOSED"
@@ -86,6 +87,15 @@ export interface Status {
     /** Source class of the B1 evidence once B1 has passed; null before. */
     authorization_basis: string | null;
   };
+  /** Real-study result status (generated; mirrors results/status.json). */
+  results_status: {
+    scientific_results_available: boolean;
+    real_experiment_executed: boolean;
+    real_brats_data_processed: boolean;
+    training_status: string;
+    status: string;
+    synthetic_demo_available: boolean;
+  };
   project: {
     title: string;
     short_title: string;
@@ -145,8 +155,41 @@ export const protocol = protocolJson as unknown as Protocol;
 export const experiments = (experimentsJson as unknown as { experiments: Experiment[] }).experiments;
 export const results = resultsJson as unknown as Results;
 
+/** SYNTHETIC pipeline demonstration (results/demo). Never a scientific result. */
+export interface Demo {
+  available: boolean;
+  demo?: true;
+  synthetic?: true;
+  scientific_result?: false;
+  label?: string;
+  disclaimer?: string;
+  demo_seed?: number;
+  generated_at?: string;
+  git_commit?: string;
+  bootstrap_replicates?: number;
+  synthetic_study?: { validation_cases: number; test_cases: number; conditions: string[] };
+  example_primary_statistic?: { name: string; estimate: number; ci_low: number; ci_high: number };
+  example_delta_aurc_by_condition?: Record<string, number>;
+  example_tau_q?: Record<string, number>;
+  example_threshold_transfer_q080?: {
+    delta_risk: number;
+    delta_coverage: number;
+    validation_coverage: number;
+    target_coverage: number;
+  };
+  example_mean_ece_et?: Record<string, number>;
+  example_failure_counts?: Record<string, Record<string, number>>;
+  figures?: string[];
+  artifacts_path?: string;
+}
+
+export const demo = demoJson as unknown as Demo;
+
+/** The public repository (clean release). Overridable at build time. */
+export const PUBLIC_REPO = "https://github.com/crazykush333/brain-tumor-segmentation-research";
+
 /** Optional, non-secret public repository URL used only to build source links. */
-export const repoUrl: string | null = process.env.NEXT_PUBLIC_REPO_URL ?? null;
+export const repoUrl: string = process.env.NEXT_PUBLIC_REPO_URL ?? PUBLIC_REPO;
 
 export function sourceLink(path: string): string | null {
   return repoUrl ? `${repoUrl.replace(/\/$/, "")}/blob/main/${path}` : null;

@@ -327,6 +327,7 @@ def build_site_data(repo_root: str | Path) -> dict[str, Any]:
             }
             | {"authorization_basis": authorization_basis(raw, root)},
             "project": raw.get("project", {}),
+            "results_status": results_status(root, raw),
         },
         "protocol.json": {
             "version": protocol.version,
@@ -338,6 +339,74 @@ def build_site_data(repo_root: str | Path) -> dict[str, Any]:
         },
         "experiments.json": {"experiments": experiments},
         "results.json": _results(root, raw),
+        "demo.json": demo_site_data(root),
+    }
+
+
+RESULTS_STATUS_RELPATH = Path("results/status.json")
+DEMO_DIR = Path("results/demo")
+SITE_DEMO_FIGURES = Path("website/public/demo")
+
+
+def results_status(root: Path, raw: dict[str, Any]) -> dict[str, Any]:
+    """Machine-readable real-result status, derived from docs/project_status.yaml only."""
+    available = bool(raw["results"].get("available"))
+    acquired = bool(raw["data"].get("acquired"))
+    executed = raw["evaluation"].get("internal") == "COMPLETED"
+    if available:
+        state = "results_available"
+    elif executed or raw["training"].get("status") != "NOT_STARTED":
+        state = "execution_in_progress"
+    elif acquired:
+        state = "data_acquired_execution_pending"
+    else:
+        state = "pending_official_data_and_compute"
+    return {
+        "scientific_results_available": available,
+        "real_experiment_executed": executed,
+        "real_brats_data_processed": acquired,
+        "training_status": raw["training"].get("status"),
+        "status": state,
+        "synthetic_demo_available": (root / DEMO_DIR / "synthetic_summary.json").is_file(),
+        "synthetic_results_in_scientific_namespace": False,
+        "statement": raw["results"].get("statement", NO_RESULTS_STATEMENT),
+        "generated_from": "docs/project_status.yaml (brats-uncertainty export-site-data)",
+    }
+
+
+def demo_site_data(root: Path) -> dict[str, Any]:
+    """Website block for the synthetic demonstration (flags checked; never a result)."""
+    from brats_uncertainty.demo import DEMO_FLAGS
+
+    path = root / DEMO_DIR / "synthetic_summary.json"
+    if not path.is_file():
+        return {"available": False}
+    body = json.loads(path.read_text(encoding="utf-8"))
+    if any(body.get(k) != v for k, v in DEMO_FLAGS.items()):
+        raise ProvenanceError("results/demo/synthetic_summary.json lacks the demo flags")
+    keep = (
+        "label",
+        "disclaimer",
+        "demo_seed",
+        "generated_at",
+        "git_commit",
+        "code_sha256",
+        "synthetic_study",
+        "example_primary_statistic",
+        "example_delta_aurc_by_condition",
+        "example_tau_q",
+        "example_threshold_transfer_q080",
+        "example_mean_ece_et",
+        "example_failure_counts",
+        "bootstrap_replicates",
+    )
+    figures = sorted(p.name for p in (root / DEMO_DIR).glob("synthetic_*.svg"))
+    return {
+        "available": True,
+        **DEMO_FLAGS,
+        **{k: body[k] for k in keep if k in body},
+        "figures": figures,
+        "artifacts_path": DEMO_DIR.as_posix(),
     }
 
 
@@ -363,4 +432,23 @@ def export_site_data(repo_root: str | Path, *, check: bool = False) -> list[str]
             if not check:
                 out_dir.mkdir(parents=True, exist_ok=True)
                 path.write_text(text, encoding="utf-8", newline="\n")
+    changed += _export_extras(root, data["demo.json"], check=check)
+    return changed
+
+
+def _export_extras(root: Path, demo: dict[str, Any], *, check: bool) -> list[str]:
+    """results/status.json and the demo figures copied for the website."""
+    changed: list[str] = []
+    targets: dict[Path, bytes] = {
+        root / RESULTS_STATUS_RELPATH: _dump(results_status(root, load_status(root).raw)).encode(),
+    }
+    for name in demo.get("figures", []):
+        targets[root / SITE_DEMO_FIGURES / name] = (root / DEMO_DIR / name).read_bytes()
+    for path, content in targets.items():
+        current = path.read_bytes() if path.is_file() else None
+        if current != content:
+            changed.append(path.relative_to(root).as_posix())
+            if not check:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
     return changed

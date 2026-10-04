@@ -116,23 +116,28 @@ def test_readme_status_line_matches_status_file(repo_root: Path) -> None:
 
 
 def test_no_numeric_results_in_results_tree(repo_root: Path) -> None:
-    """Until results.available, results/ holds only READMEs and the master-run state summary
-    (gate/step states and hashes; it must itself declare that no results exist)."""
+    """Until results.available, results/ holds only README.md, the generated status.json
+    (which declares that no results exist) and the flagged synthetic demonstration."""
     import json
+
+    from brats_uncertainty.demo import is_demo_artifact
 
     status = yaml.safe_load((repo_root / "docs/project_status.yaml").read_text(encoding="utf-8"))
     if status["results"]["available"]:
         return  # results exist: they are checked through results/index.json (site export)
-    files = [p for p in (repo_root / "results").rglob("*") if p.is_file()]
-    readmes = [p for p in files if p.name == "README.md"]
-    others = [p for p in files if p.name != "README.md"]
-    rel = [p.relative_to(repo_root).as_posix() for p in others]
-    assert rel in ([], ["results/run_summary.json"]), rel
-    for p in readmes:
-        assert "No scientific results are available" in p.read_text(encoding="utf-8")
-    for p in others:
-        summary = json.loads(p.read_text(encoding="utf-8"))
-        assert summary["results_available"] is False and summary["results"] is None
+    for p in (repo_root / "results").rglob("*"):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(repo_root).as_posix()
+        if rel == "results/README.md":
+            assert "No real scientific results are available" in p.read_text(encoding="utf-8")
+        elif rel == "results/status.json":
+            body = json.loads(p.read_text(encoding="utf-8"))
+            assert body["scientific_results_available"] is False
+            assert body["real_experiment_executed"] is False
+            assert body["synthetic_results_in_scientific_namespace"] is False
+        else:
+            assert rel.startswith("results/demo/") and is_demo_artifact(p), rel
 
 
 def test_protocol_mirror_integrity_check_fails_on_tamper(tmp_path: Path, repo_root: Path) -> None:

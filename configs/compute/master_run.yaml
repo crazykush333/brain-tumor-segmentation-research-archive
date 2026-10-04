@@ -11,7 +11,7 @@ paths:
   records_dir: docs/data/records      # committed B2-B9 execution records (IDs/hashes only)
   splits_dir: splits                  # committed IDs/group IDs + hashes (B9-B12)
   exp001_dir: results/EXP-001         # committed pilot measurements (no images/checkpoints)
-  run_summary: results/run_summary.json
+  run_summary: docs/research/execution/run_summary.json   # execution state (no results)
   final_audit: docs/research/FINAL_RESEARCH_AUDIT.md
 
 acquisition:                          # gate B2, approved route only (amendment v1.0-A1)

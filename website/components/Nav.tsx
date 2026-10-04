@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { status } from "@/lib/data";
+import { repoUrl, status } from "@/lib/data";
 
 const LINKS: [string, string][] = [
   ["/research/", "Research"],
@@ -46,6 +46,13 @@ export function Footer() {
         <p>
           All status information on this site is generated from the repository&apos;s{" "}
           <code className="mono">docs/project_status.yaml</code>. This site contains no patient data.
+        </p>
+        <p>
+          Source code, frozen protocol and gate records:{" "}
+          <a href={repoUrl} className="underline">
+            {repoUrl.replace("https://", "")}
+          </a>
+          . Real scientific results are pending; demo figures are synthetic and labelled as such.
         </p>
       </div>
     </footer>

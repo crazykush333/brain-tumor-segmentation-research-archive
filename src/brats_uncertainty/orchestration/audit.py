@@ -1,4 +1,4 @@
-"""Run summary (``results/run_summary.json``) and the final research audit.
+"""Run summary (``docs/research/execution/run_summary.json``) and the final research audit.
 
 Both are generated only from recorded state: docs/project_status.yaml, the master
 state journal and committed records. No value is typed by hand, and nothing is

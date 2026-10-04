@@ -5,8 +5,10 @@ else (checkpoints, NIfTI/DICOM, archives, arrays, spreadsheets, licensed metadat
 credentials) is skipped and listed in the report, never copied. The export fails
 closed (nothing copied) on symbolic links, on imaging/archive content disguised
 under an allowed name (magic-byte sniffing), on files above the repository size
-limit, on invalid or synthetic ``*.metrics.json`` files and on invalid
-``run_manifest.json`` statuses. Existing destination files are never overwritten.
+limit, on invalid or synthetic ``*.metrics.json`` files, on invalid
+``run_manifest.json`` statuses and on synthetic demonstration files
+(``brats_uncertainty.demo``): demo artifacts are never exported as research results.
+Existing destination files are never overwritten.
 """
 
 from __future__ import annotations
@@ -55,6 +57,12 @@ def export_public_artifacts(source: Path, dest: Path) -> ExportReport:
         ):
             report.skipped.append(rel)
             continue
+        from brats_uncertainty.demo import is_demo_artifact
+
+        if is_demo_artifact(p):
+            raise ProvenanceError(
+                f"{rel}: synthetic demonstration file; never exported as a result"
+            )
         sniffed = sniff_imaging(p)
         if sniffed:
             raise ProvenanceError(f"{rel}: {sniffed} content under an allowed name")
