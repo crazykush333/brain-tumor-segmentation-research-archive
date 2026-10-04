@@ -2,6 +2,9 @@
 
 > **Status: Protocol v1.0 frozen. Experimental execution pending.**
 
+> [!IMPORTANT]
+> **ARCHIVAL REPOSITORY — historical development history.** The maintained public release is **https://github.com/crazykush333/brain-tumor-segmentation-research** (clean history). This archive keeps the original commits, the `protocol-v1.0` freeze tag and the gate records unchanged; see [docs/research/ARCHIVAL_PROVENANCE.md](docs/research/ARCHIVAL_PROVENANCE.md).
+
 A pre-registered, reproducible research pipeline for case-level uncertainty estimation under missing MRI sequences in brain tumour segmentation.
 
 **REAL EXPERIMENT STATUS: pending official data acquisition and suitable GPU execution.** No BraTS data have been acquired, no model has been trained, no split has been created and no scientific result exists.
